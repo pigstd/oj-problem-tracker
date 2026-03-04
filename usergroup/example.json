@@ -1,6 +1,9 @@
 {
-    "users": [
-        "pigstd",
-        "tomato_fish"
-    ]
+  "atcoder": [
+    "pigstd",
+    "tomato_fish"
+  ],
+  "cf": [
+    "pigstd",
+    "fengqiyuka"]
 }

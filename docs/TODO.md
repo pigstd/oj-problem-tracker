@@ -1,15 +1,27 @@
-接下来完成缓存实现（基于已确认设计）：
+# TODO
 
-- 每个用户使用一个缓存文件：`cache/users/{user_id}.json`。
-- 若 `cache/users/` 目录不存在，程序自动创建。
-- 若某用户缓存文件不存在，程序自动创建该文件并做首次全量初始化。
-- 缓存字段包含：`version`、`user_id`、`last_updated_at`、`next_from_second`、`submissions`。
-- `submissions` 保存 API 返回的完整字段，不做裁剪，不限制缓存大小。
-- 增量更新游标使用 `next_from_second`，按 `from_second = max(epoch_second) + 1` 推进。
-- 记录更新间隔常量：`CACHE_MIN_UPDATE_INTERVAL_SECONDS`（默认 86400 秒）。
-- 当“当前时间 - last_updated_at < 更新间隔”时，本次不更新缓存，直接用本地缓存处理。
-- 当达到更新间隔时，从 `next_from_second` 继续增量拉取并写回缓存。
-- 新增 `--refresh-cache` 参数，强制从 `from_second=0` 全量重建缓存。
-- 程序主流程拆分为两阶段：
-  - 更新缓存阶段
-  - 从缓存处理判定阶段
+## 支持多 OJ（AtCoder + Codeforces）
+
+- [x] CLI 增加 `--oj` 参数，支持 `atcoder` / `cf`
+- [x] `--oj cf` 时校验 `--contest` 为纯数字
+- [x] group 文件解析改为新格式：`{"atcoder": [...], "cf": [...]}`
+- [x] 缓存目录拆分为 `cache/atcoder/users/` 与 `cache/cf/users/`
+- [x] 缓存结构增加 `oj` 字段，并升级 `version`
+
+## AtCoder
+
+- [x] 保留现有 API + 403 代理回退逻辑
+- [x] 保留 `from_second` 增量分页策略
+- [x] 保留 `contest_id` 大小写不敏感匹配
+
+## Codeforces
+
+- [x] 新增 `user.status` 抓取逻辑
+- [x] 过期更新时执行全量重抓（不走增量游标）
+- [x] 新增 `contestId` 数值匹配逻辑
+
+## 测试
+
+- [x] 更新现有缓存测试以适配 OJ 维度
+- [x] 新增 Codeforces 缓存行为测试（fresh skip / stale full refetch / refresh）
+- [x] 新增参数与输入格式校验测试

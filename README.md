@@ -1,7 +1,7 @@
-# atcoder-problem-tracker
-A tool for ACM team coach to check whether team members have submitted in a target AtCoder contest.
+# oj-problem-tracker
+A tool for ACM team coach to check whether team members have submitted in a target contest.
 
-Use [kenkoooo/AtCoderProblems API](https://github.com/kenkoooo/AtCoderProblems/blob/master/doc/api.md) to fetch user submissions.
+Supported OJ: AtCoder and Codeforces.
 
 ## Requirements
 
@@ -13,43 +13,64 @@ Create a group file in `usergroup/`, for example `usergroup/example.json`:
 
 ```json
 {
-  "users": [
-    "user1",
-    "user2",
-    "user3"
-  ]
+  "atcoder": ["user1", "user2", "user3"],
+  "cf": ["tourist", "Petr"]
 }
 ```
 
 ## Usage
 
-Check whether users in a group have submissions in contest `abc403`:
+Check AtCoder users in a group for contest `abc403`:
 
 ```bash
-python3 atcoder-problem-tracker.py -c abc403 -g example
+python3 oj-problem-tracker.py --oj atcoder -c abc403 -g example
 ```
 
-Force rebuild cache and fetch from `from_second=0`:
+Check Codeforces users in a group for contest `2065`:
 
 ```bash
-python3 atcoder-problem-tracker.py -c abc403 -g example --refresh-cache
+python3 oj-problem-tracker.py --oj cf -c 2065 -g example
+```
+
+Force refresh cache:
+
+```bash
+python3 oj-problem-tracker.py --oj atcoder -c abc403 -g example --refresh-cache
 ```
 
 Show command help:
 
 ```bash
-python3 atcoder-problem-tracker.py --help
+python3 oj-problem-tracker.py --help
 ```
+
+## APIs
+
+- AtCoder submissions API (primary):
+  - `https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions?user={user_id}&from_second={from_second}`
+- AtCoder proxy fallback (used when primary returns HTTP 403):
+  - `https://r.jina.ai/http://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions?user={user_id}&from_second={from_second}`
+- Codeforces submissions API:
+  - `https://codeforces.com/api/user.status?handle={handle}&from={from}&count={count}`
+
+Request pacing:
+
+- AtCoder: 1 request per second
+- Codeforces: 1 request per 2 seconds
 
 ## Cache Behavior
 
-- Cache path: `cache/users/{user_id}.json`
-- If `cache/users/` does not exist, it is created automatically.
+- Cache path:
+  - AtCoder: `cache/atcoder/users/{user_id}.json`
+  - Codeforces: `cache/cf/users/{user_id}.json`
+- If cache directories do not exist, they are created automatically.
 - If a user's cache file does not exist, it is created automatically by full fetch.
 - Default minimum update interval is 24 hours (`86400` seconds).
 - If cache is fresh (less than 24 hours), the program skips network update and uses local cache.
-- If cache is stale (24 hours or more), the program updates from `next_from_second`.
-- `--refresh-cache` always forces full rebuild.
+- If cache is stale (24 hours or more):
+  - AtCoder updates from `next_from_second`.
+  - Codeforces performs full refetch from page 1.
+- `--refresh-cache` always forces refresh.
 
 ## Output
 
