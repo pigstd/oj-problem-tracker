@@ -32,6 +32,12 @@ Check Codeforces users in a group for contest `2065`:
 python3 oj-problem-tracker.py --oj cf -c 2065 -g example
 ```
 
+Can also used in gym contests(e.g. gym104059):
+
+```bash
+python3 oj-problem-tracker.py --oj cf -c 104059 -g example
+```
+
 Force refresh cache:
 
 ```bash
