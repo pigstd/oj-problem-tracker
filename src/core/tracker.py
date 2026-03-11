@@ -4,6 +4,7 @@ from typing import Any
 
 from src.core import cache
 from src.oj.base import ContestKey, OJAdapter
+from src.output import ANSI_YELLOW, print_colored
 
 
 def update_user_cache(adapter: OJAdapter, user_id: str, refresh_cache: bool) -> dict[str, Any]:
@@ -15,10 +16,10 @@ def update_user_cache(adapter: OJAdapter, user_id: str, refresh_cache: bool) -> 
         and existing_cache is not None
         and cache.should_skip_cache_update(existing_cache["last_updated_at"])
     ):
-        print(f"cache hit, skip update for {user_id}", flush=True)
+        print_colored(f"cache hit, skip update for {user_id}", ANSI_YELLOW)
         return existing_cache
 
-    print(f"updating cache for {user_id} ...", flush=True)
+    print_colored(f"updating cache for {user_id} ...", ANSI_YELLOW)
     update_payload = adapter.update_submissions(user_id, existing_cache, refresh_cache)
 
     updated_cache = {

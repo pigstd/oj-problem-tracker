@@ -8,7 +8,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from src.cli import ANSI_GREEN, ANSI_RED, ANSI_RESET, load_group_users, main, parse_args, run
+from src.cli import ANSI_GREEN, ANSI_RED, ANSI_RESET, ANSI_YELLOW, load_group_users, main, parse_args, run
 from src.core import cache as cache_store
 from src.core import tracker as tracker_service
 from src.core.errors import TrackerError
@@ -103,6 +103,27 @@ class CacheBehaviorTest(unittest.TestCase):
         self.assertEqual(cache["next_from_second"], 42)
         self.assertEqual(len(cache["submissions"]), 1)
 
+    def test_atcoder_skip_update_prints_yellow_cache_hit_status(self) -> None:
+        """Verify fresh caches emit the yellow cache-hit status line."""
+        payload = _cache_payload(
+            oj="atcoder",
+            user_id="bob",
+            last_updated_at=_iso_utc_hours_ago(1),
+            next_from_second=42,
+            submissions=[{"id": 11, "epoch_second": 41, "contest_id": "abc001"}],
+        )
+        cache_store.write_user_cache("atcoder", "bob", payload)
+
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            cache = tracker_service.update_user_cache(self.atcoder, "bob", refresh_cache=False)
+
+        self.assertEqual(cache["next_from_second"], 42)
+        self.assertEqual(
+            stdout.getvalue(),
+            f"{ANSI_YELLOW}cache hit, skip update for bob{ANSI_RESET}\n",
+        )
+
     def test_atcoder_incremental_update_and_dedup(self) -> None:
         """Verify stale AtCoder caches merge new pages while deduplicating submission IDs."""
         payload = _cache_payload(
@@ -155,6 +176,27 @@ class CacheBehaviorTest(unittest.TestCase):
 
         self.assertEqual(cache["next_from_second"], 8)
         self.assertEqual([s["id"] for s in cache["submissions"]], [101])
+
+    def test_atcoder_create_cache_prints_yellow_update_status(self) -> None:
+        """Verify cache refreshes emit the yellow updating status line."""
+        def fake_fetch(user_id: str, from_second: int):
+            self.assertEqual(user_id, "erin")
+            if from_second == 0:
+                return [{"id": 1, "epoch_second": 100, "contest_id": "abc100"}]
+            if from_second == 101:
+                return []
+            self.fail(f"unexpected from_second={from_second}")
+
+        self.atcoder._fetch_submissions_with_retry = fake_fetch
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            cache = tracker_service.update_user_cache(self.atcoder, "erin", refresh_cache=False)
+
+        self.assertEqual(cache["next_from_second"], 101)
+        self.assertEqual(
+            stdout.getvalue(),
+            f"{ANSI_YELLOW}updating cache for erin ...{ANSI_RESET}\n",
+        )
 
     def test_cf_create_cache_for_new_user(self) -> None:
         """Verify a missing Codeforces cache is created from the first fetched page."""
@@ -362,12 +404,10 @@ class CliOutputColorTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(mock_update_user_cache.call_count, 2)
         lines = stdout.getvalue().splitlines()
-        self.assertEqual(lines[0], "checking user alice ...")
-        self.assertEqual(lines[1], "checking user bob ...")
+        self.assertEqual(lines[0], f"{ANSI_YELLOW}checking user alice ...{ANSI_RESET}")
+        self.assertEqual(lines[1], f"{ANSI_YELLOW}checking user bob ...{ANSI_RESET}")
         self.assertEqual(lines[2], f"{ANSI_RED}alice done abc403{ANSI_RESET}")
         self.assertEqual(lines[3], f"{ANSI_RED}bob done abc404{ANSI_RESET}")
-        self.assertNotIn("\033[", lines[0])
-        self.assertNotIn("\033[", lines[1])
 
     def test_run_colors_no_hit_result_in_green_for_each_contest(self) -> None:
         """Verify each contest without hits emits its own green status line."""

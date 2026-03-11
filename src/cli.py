@@ -4,16 +4,13 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any
 
 from src.core import cache
 from src.core import tracker
 from src.core.errors import TrackerError
 from src.oj.registry import available_oj_names, get_adapter
-
-ANSI_RED = "\033[31m"
-ANSI_GREEN = "\033[32m"
-ANSI_RESET = "\033[0m"
+from src.output import ANSI_GREEN, ANSI_RED, ANSI_RESET, ANSI_YELLOW, print_colored
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -91,16 +88,6 @@ def load_group_users(group_name: str, oj: str) -> list[str]:
     return users
 
 
-def colorize(text: str, color: str) -> str:
-    """Wrap a text line with an ANSI color code and trailing reset sequence."""
-    return f"{color}{text}{ANSI_RESET}"
-
-
-def print_colored(text: str, color: str, *, file: TextIO | None = None) -> None:
-    """Print a single colored line to stdout or a provided stream."""
-    print(colorize(text, color), file=file, flush=True)
-
-
 def run(argv: list[str] | None = None) -> int:
     """Run the CLI workflow by refreshing caches once and checking each requested contest."""
     args = parse_args(argv)
@@ -111,7 +98,7 @@ def run(argv: list[str] | None = None) -> int:
 
     user_caches: dict[str, dict[str, Any]] = {}
     for user_id in users:
-        print(f"checking user {user_id} ...", flush=True)
+        print_colored(f"checking user {user_id} ...", ANSI_YELLOW)
         user_caches[user_id] = tracker.update_user_cache(adapter, user_id, args.refresh_cache)
 
     for raw_contest, target_contest in zip(args.contest, target_contests):
