@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -18,6 +19,9 @@ API_PROXY_PREFIX = "https://r.jina.ai/http://kenkoooo.com/atcoder/atcoder-api/v3
 MAX_CONSECUTIVE_FAILURES = 5
 REQUEST_INTERVAL_SECONDS = 1
 USER_AGENT = "oj-problem-tracker/1.0 (+https://github.com/)"
+CONTEST_RANGE_PATTERN = re.compile(
+    r"^(?P<start_prefix>.+?)(?P<start_number>\d+)-(?P<end_prefix>.+?)(?P<end_number>\d+)$"
+)
 
 
 class AtCoderAdapter(OJAdapter):
@@ -31,6 +35,35 @@ class AtCoderAdapter(OJAdapter):
     def validate_contest(self, contest: str) -> ContestKey:
         """Return the AtCoder contest ID unchanged."""
         return contest
+
+    def expand_contest_token(self, token: str) -> list[ContestKey]:
+        """Expand an AtCoder contest token into one or more contest IDs."""
+        if "-" not in token:
+            return [self.validate_contest(token)]
+
+        match = CONTEST_RANGE_PATTERN.fullmatch(token)
+        if match is None:
+            raise TrackerError(
+                "invalid atcoder contest token: "
+                f"{token}; expected a contest ID or range like abc300-abc305"
+            )
+
+        start_prefix = match.group("start_prefix")
+        end_prefix = match.group("end_prefix")
+        if start_prefix.lower() != end_prefix.lower():
+            raise TrackerError(
+                f"invalid atcoder contest range: {token}; range endpoints must share the same prefix"
+            )
+
+        start_number = int(match.group("start_number"))
+        end_number = int(match.group("end_number"))
+        if start_number > end_number:
+            raise TrackerError(
+                f"invalid atcoder contest range: {token}; range start must not exceed end"
+            )
+
+        width = max(len(match.group("start_number")), len(match.group("end_number")))
+        return [f"{start_prefix}{number:0{width}d}" for number in range(start_number, end_number + 1)]
 
     def validate_cache_fields(self, cache_data: dict[str, Any], cache_file: Path) -> None:
         """Ensure AtCoder caches store a valid incremental pagination cursor."""

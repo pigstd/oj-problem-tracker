@@ -15,7 +15,11 @@ class OJAdapter(ABC):
 
     @abstractmethod
     def validate_contest(self, contest: str) -> ContestKey:
-        """Validate contest argument and normalize its type."""
+        """Validate a single contest ID and normalize its type."""
+
+    @abstractmethod
+    def expand_contest_token(self, token: str) -> list[ContestKey]:
+        """Expand one CLI contest token into normalized contest IDs."""
 
     @abstractmethod
     def validate_cache_fields(self, cache_data: dict[str, Any], cache_file: Path) -> None:

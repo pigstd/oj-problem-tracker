@@ -9,6 +9,7 @@ from typing import Any
 from src.core import cache
 from src.core import tracker
 from src.core.errors import TrackerError
+from src.oj.base import ContestKey, OJAdapter
 from src.oj.registry import available_oj_names, get_adapter
 from src.output import ANSI_GREEN, ANSI_RED, ANSI_RESET, ANSI_YELLOW, print_colored
 
@@ -29,7 +30,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--contest",
         required=True,
         nargs="+",
-        help="One or more contest IDs to check",
+        help="One or more contest IDs or inclusive contest ranges to check",
     )
     parser.add_argument(
         "-g",
@@ -43,6 +44,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Force refresh cache, ignoring update interval.",
     )
     return parser.parse_args(argv)
+
+
+def _expand_target_contests(adapter: OJAdapter, contest_tokens: list[str]) -> list[ContestKey]:
+    """Expand raw CLI contest tokens into a flat ordered contest list."""
+    target_contests: list[ContestKey] = []
+    for token in contest_tokens:
+        target_contests.extend(adapter.expand_contest_token(token))
+    return target_contests
 
 
 def _validate_group_users(data: Any, group_file: Path) -> dict[str, list[str]]:
@@ -92,7 +101,7 @@ def run(argv: list[str] | None = None) -> int:
     """Run the CLI workflow by refreshing caches once and checking each requested contest."""
     args = parse_args(argv)
     adapter = get_adapter(args.oj)
-    target_contests = [adapter.validate_contest(contest) for contest in args.contest]
+    target_contests = _expand_target_contests(adapter, args.contest)
     users = load_group_users(args.group, args.oj)
     cache.ensure_cache_dir_exists(adapter.name)
 
@@ -101,15 +110,16 @@ def run(argv: list[str] | None = None) -> int:
         print_colored(f"checking user {user_id} ...", ANSI_YELLOW)
         user_caches[user_id] = tracker.update_user_cache(adapter, user_id, args.refresh_cache)
 
-    for raw_contest, target_contest in zip(args.contest, target_contests):
+    for target_contest in target_contests:
+        contest_label = str(target_contest)
         found_any = False
         for user_id in users:
             if tracker.cache_has_done_contest(adapter, user_caches[user_id]["submissions"], target_contest):
-                print_colored(f"{user_id} done {raw_contest}", ANSI_RED)
+                print_colored(f"{user_id} done {contest_label}", ANSI_RED)
                 found_any = True
 
         if not found_any:
-            print_colored(f"no users have done {raw_contest}", ANSI_GREEN)
+            print_colored(f"no users have done {contest_label}", ANSI_GREEN)
 
     return 0
 

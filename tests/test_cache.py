@@ -342,6 +342,38 @@ class InputValidationTest(unittest.TestCase):
         with self.assertRaises(TrackerError):
             cf.validate_contest("abc403")
 
+    def test_expand_contest_token_supports_single_and_range_inputs(self) -> None:
+        """Verify both adapters expand single contest IDs and inclusive ranges."""
+        atcoder = AtCoderAdapter()
+        cf = CodeforcesAdapter()
+
+        self.assertEqual(atcoder.expand_contest_token("abc403"), ["abc403"])
+        self.assertEqual(atcoder.expand_contest_token("abc403-abc405"), ["abc403", "abc404", "abc405"])
+        self.assertEqual(cf.expand_contest_token("2065"), [2065])
+        self.assertEqual(cf.expand_contest_token("2065-2067"), [2065, 2066, 2067])
+
+    def test_expand_contest_token_rejects_invalid_cf_ranges(self) -> None:
+        """Verify Codeforces rejects malformed or reversed contest ranges."""
+        cf = CodeforcesAdapter()
+
+        with self.assertRaises(TrackerError):
+            cf.expand_contest_token("abc403-abc405")
+        with self.assertRaises(TrackerError):
+            cf.expand_contest_token("2067-2065")
+        with self.assertRaises(TrackerError):
+            cf.expand_contest_token("2065-")
+
+    def test_expand_contest_token_rejects_invalid_atcoder_ranges(self) -> None:
+        """Verify AtCoder rejects malformed, cross-prefix, or reversed ranges."""
+        atcoder = AtCoderAdapter()
+
+        with self.assertRaises(TrackerError):
+            atcoder.expand_contest_token("abc300-arc305")
+        with self.assertRaises(TrackerError):
+            atcoder.expand_contest_token("abc405-abc403")
+        with self.assertRaises(TrackerError):
+            atcoder.expand_contest_token("abc300-305")
+
     def test_cache_has_done_contest_for_both_oj(self) -> None:
         """Verify contest matching works for both AtCoder and Codeforces submissions."""
         atcoder = AtCoderAdapter()
@@ -373,13 +405,17 @@ class InputValidationTest(unittest.TestCase):
 class CliOutputColorTest(unittest.TestCase):
     """Verify colored CLI output and multi-contest orchestration behavior."""
 
-    def test_run_colors_multi_contest_results_and_updates_cache_once_per_user(self) -> None:
-        """Verify hits are colored per contest while each user cache is updated once."""
+    def test_run_expands_ranges_in_input_order_and_updates_cache_once_per_user(self) -> None:
+        """Verify range tokens expand in order while each user cache is updated once."""
         class FakeAdapter:
             name = "atcoder"
 
-            def validate_contest(self, contest: str) -> str:
-                return contest
+            def expand_contest_token(self, token: str) -> list[str]:
+                mapping = {
+                    "abc402": ["abc402"],
+                    "abc403-abc404": ["abc403", "abc404"],
+                }
+                return mapping[token]
 
         stdout = io.StringIO()
         with (
@@ -395,27 +431,30 @@ class CliOutputColorTest(unittest.TestCase):
             ) as mock_update_user_cache,
             patch(
                 "src.cli.tracker.cache_has_done_contest",
-                side_effect=[True, False, False, True],
+                side_effect=[False, False, True, False, False, True],
             ),
             redirect_stdout(stdout),
         ):
-            exit_code = run(["--oj", "atcoder", "-c", "abc403", "abc404", "-g", "example"])
+            exit_code = run(["--oj", "atcoder", "-c", "abc402", "abc403-abc404", "-g", "example"])
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(mock_update_user_cache.call_count, 2)
         lines = stdout.getvalue().splitlines()
         self.assertEqual(lines[0], f"{ANSI_YELLOW}checking user alice ...{ANSI_RESET}")
         self.assertEqual(lines[1], f"{ANSI_YELLOW}checking user bob ...{ANSI_RESET}")
-        self.assertEqual(lines[2], f"{ANSI_RED}alice done abc403{ANSI_RESET}")
-        self.assertEqual(lines[3], f"{ANSI_RED}bob done abc404{ANSI_RESET}")
+        self.assertEqual(lines[2], f"{ANSI_GREEN}no users have done abc402{ANSI_RESET}")
+        self.assertEqual(lines[3], f"{ANSI_RED}alice done abc403{ANSI_RESET}")
+        self.assertEqual(lines[4], f"{ANSI_RED}bob done abc404{ANSI_RESET}")
 
-    def test_run_colors_no_hit_result_in_green_for_each_contest(self) -> None:
-        """Verify each contest without hits emits its own green status line."""
+    def test_run_colors_no_hit_result_in_green_for_each_expanded_contest(self) -> None:
+        """Verify each expanded contest without hits emits its own green status line."""
         class FakeAdapter:
             name = "cf"
 
-            def validate_contest(self, contest: str) -> int:
-                return int(contest)
+            def expand_contest_token(self, token: str) -> list[int]:
+                if token == "2065-2066":
+                    return [2065, 2066]
+                raise AssertionError(f"unexpected token: {token}")
 
         stdout = io.StringIO()
         with (
@@ -426,7 +465,7 @@ class CliOutputColorTest(unittest.TestCase):
             patch("src.cli.tracker.cache_has_done_contest", side_effect=[False, False]),
             redirect_stdout(stdout),
         ):
-            exit_code = run(["--oj", "cf", "-c", "2065", "2066", "-g", "example"])
+            exit_code = run(["--oj", "cf", "-c", "2065-2066", "-g", "example"])
 
         self.assertEqual(exit_code, 0)
         lines = stdout.getvalue().splitlines()
@@ -434,10 +473,10 @@ class CliOutputColorTest(unittest.TestCase):
         self.assertEqual(lines[-1], f"{ANSI_GREEN}no users have done 2066{ANSI_RESET}")
 
     def test_run_rejects_non_numeric_cf_contest_in_multi_contest_input(self) -> None:
-        """Verify Codeforces multi-contest input rejects any non-numeric contest ID."""
+        """Verify Codeforces contest input rejects any non-numeric token or range."""
         with patch("src.cli.get_adapter", return_value=CodeforcesAdapter()):
             with self.assertRaises(TrackerError):
-                run(["--oj", "cf", "-c", "2065", "abc403", "-g", "example"])
+                run(["--oj", "cf", "-c", "2065", "abc403-abc405", "-g", "example"])
 
     def test_main_colors_tracker_error_in_red_stderr(self) -> None:
         """Verify CLI domain errors are rendered to stderr using the error color."""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -17,6 +18,7 @@ MAX_CONSECUTIVE_FAILURES = 5
 REQUEST_INTERVAL_SECONDS = 2
 PAGE_SIZE = 1000
 USER_AGENT = "oj-problem-tracker/1.0 (+https://github.com/)"
+CONTEST_RANGE_PATTERN = re.compile(r"^(?P<start>\d+)-(?P<end>\d+)$")
 
 
 class CodeforcesAdapter(OJAdapter):
@@ -28,6 +30,24 @@ class CodeforcesAdapter(OJAdapter):
         if not contest.isdigit():
             raise TrackerError("for --oj cf, --contest must be a pure numeric contestId")
         return int(contest)
+
+    def expand_contest_token(self, token: str) -> list[ContestKey]:
+        """Expand a Codeforces contest token into one or more numeric contest IDs."""
+        if "-" not in token:
+            return [self.validate_contest(token)]
+
+        match = CONTEST_RANGE_PATTERN.fullmatch(token)
+        if match is None:
+            raise TrackerError(
+                f"invalid cf contest token: {token}; expected a numeric contestId or range like 2065-2070"
+            )
+
+        start = int(match.group("start"))
+        end = int(match.group("end"))
+        if start > end:
+            raise TrackerError(f"invalid cf contest range: {token}; range start must not exceed end")
+
+        return list(range(start, end + 1))
 
     def validate_cache_fields(self, cache_data: dict[str, Any], cache_file: Path) -> None:
         """Accept current Codeforces caches and guard legacy next_from_second values if present."""
