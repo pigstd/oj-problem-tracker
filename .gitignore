@@ -212,3 +212,7 @@ usergroup/*
 
 # cache for data
 cache/
+
+# codex
+.codex
+.codex/

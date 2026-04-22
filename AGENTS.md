@@ -8,7 +8,7 @@ Before coding, be sure to understand the requirments in the docs/ directory and 
 
 ### Boundaries
 
-- You shouldn't make any changes to the documentation in the docs/ directory unless explicitly asked to do so.
+- You shouldn't make any changes to the documentation in the docs/ directory unless explicitly asked to do so. But you should make sure that the documentation is up to date with the codebase. If the documentation is not corresponding to the codebase, you should ask for clarification and update the documentation accordingly.
 - Before you do something command which is irreversible(e.g., deleting files, pushing to main branch), you should ask for confirmation.
 
 ### Code Comment Style
