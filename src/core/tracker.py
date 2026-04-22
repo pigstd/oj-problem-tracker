@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Callable
 from typing import Any
 
 from src.core import cache
@@ -7,7 +8,17 @@ from src.oj.base import ContestKey, OJAdapter
 from src.output import ANSI_YELLOW, print_colored
 
 
-def update_user_cache(adapter: OJAdapter, user_id: str, refresh_cache: bool) -> dict[str, Any]:
+CacheStatusCallback = Callable[[str, str], None]
+
+
+def update_user_cache(
+    adapter: OJAdapter,
+    user_id: str,
+    refresh_cache: bool,
+    *,
+    status_callback: CacheStatusCallback | None = None,
+    emit_output: bool = True,
+) -> dict[str, Any]:
     """Load, refresh, and persist one user's cache according to refresh policy."""
     existing_cache = cache.load_user_cache(adapter.name, user_id, adapter)
 
@@ -16,10 +27,18 @@ def update_user_cache(adapter: OJAdapter, user_id: str, refresh_cache: bool) -> 
         and existing_cache is not None
         and cache.should_skip_cache_update(existing_cache["last_updated_at"])
     ):
-        print_colored(f"cache hit, skip update for {user_id}", ANSI_YELLOW)
+        message = f"cache hit, skip update for {user_id}"
+        if emit_output:
+            print_colored(message, ANSI_YELLOW)
+        if status_callback is not None:
+            status_callback("cache_hit", message)
         return existing_cache
 
-    print_colored(f"updating cache for {user_id} ...", ANSI_YELLOW)
+    message = f"updating cache for {user_id} ..."
+    if emit_output:
+        print_colored(message, ANSI_YELLOW)
+    if status_callback is not None:
+        status_callback("updating_cache", message)
     update_payload = adapter.update_submissions(user_id, existing_cache, refresh_cache)
 
     updated_cache = {

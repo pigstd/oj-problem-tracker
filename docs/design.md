@@ -92,4 +92,7 @@ python3 oj-problem-tracker.py --oj cf -c 2065 2067-2069 -g example
 
 - AtCoder 细节：`docs/oj-atcoder.md`
 - Codeforces 细节：`docs/oj-codeforces.md`
+- Web 前端设计：`docs/frontend.md`
 - 测试说明：`docs/test.md`
+
+当前 Web 界面的布局、交互和接口依赖以 `docs/frontend.md` 为准。

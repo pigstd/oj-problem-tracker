@@ -21,6 +21,12 @@ Create a group file in `usergroup/`, for example `usergroup/example.json`:
 
 ## Usage
 
+Run the localhost web UI:
+
+```bash
+python3 oj-web.py
+```
+
 Check AtCoder users in a group for explicit contests:
 
 ```bash
@@ -117,6 +123,7 @@ Request pacing:
 ## Design Docs
 
 - Overall workflow: `docs/design.md`
+- Web frontend layout: `docs/frontend.md`
 - AtCoder rules: `docs/oj-atcoder.md`
 - Codeforces rules: `docs/oj-codeforces.md`
 - Test guide: `docs/test.md`

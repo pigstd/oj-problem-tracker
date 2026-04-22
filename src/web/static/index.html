@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OJ Problem Tracker</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="title-row">
+        <h1>OJ Problem Tracker</h1>
+      </header>
+
+      <main class="content-grid">
+        <section class="panel input-panel">
+          <div class="panel-header">
+            <h2>Input</h2>
+          </div>
+
+          <form id="check-form" class="check-form">
+            <fieldset class="field-block oj-fieldset">
+              <legend>OJ</legend>
+              <label class="oj-option">
+                <input type="radio" name="oj" value="atcoder" checked />
+                <span>AtCoder</span>
+              </label>
+              <label class="oj-option">
+                <input type="radio" name="oj" value="cf" />
+                <span>Codeforces</span>
+              </label>
+            </fieldset>
+
+            <div class="field-block">
+              <label class="field-label" for="group-select">Group</label>
+              <div class="group-row">
+                <select id="group-select" name="group"></select>
+                <button id="group-view-button" class="secondary-button" type="button">View</button>
+              </div>
+            </div>
+
+            <div class="field-block">
+              <label class="field-label" for="contest-input">Contest Token</label>
+              <textarea
+                id="contest-input"
+                name="contest"
+                rows="4"
+                placeholder="abc403 abc404-abc406&#10;or&#10;2065 2067-2070"
+              ></textarea>
+            </div>
+
+            <label class="refresh-toggle" for="refresh-cache">
+              <input type="checkbox" id="refresh-cache" name="refresh_cache" />
+              <span>Force refresh cache</span>
+            </label>
+
+            <button id="submit-button" class="submit-button" type="submit">Start Check</button>
+          </form>
+
+          <div id="group-errors" class="notice-stack" hidden></div>
+          <div id="form-error" class="notice error" hidden></div>
+        </section>
+
+        <section class="panel log-panel">
+          <div class="panel-header">
+            <h2>Log</h2>
+            <span id="run-status" class="status-pill idle">Idle</span>
+          </div>
+
+          <ol id="event-feed" class="log-feed"></ol>
+        </section>
+
+        <section class="panel result-panel">
+          <div class="panel-header">
+            <h2>Result</h2>
+          </div>
+
+          <div id="contest-results" class="result-list empty-state">
+            Expanded contest results will show up here.
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="group-modal" class="modal-shell" hidden>
+      <div id="group-modal-backdrop" class="modal-backdrop"></div>
+      <section
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="group-modal-title"
+      >
+        <div class="modal-header">
+          <div>
+            <p class="modal-kicker">Group Detail</p>
+            <h2 id="group-modal-title">Group</h2>
+          </div>
+          <button
+            id="group-modal-close"
+            class="icon-button"
+            type="button"
+            aria-label="Close group detail"
+          >
+            Close
+          </button>
+        </div>
+        <div id="group-modal-content" class="modal-content"></div>
+      </section>
+    </div>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

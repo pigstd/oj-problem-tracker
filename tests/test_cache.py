@@ -8,8 +8,10 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from src.cli import ANSI_GREEN, ANSI_RED, ANSI_RESET, ANSI_YELLOW, load_group_users, main, parse_args, run
+from src.core.checks import CheckEvent
+from src.cli import ANSI_GREEN, ANSI_RED, ANSI_RESET, ANSI_YELLOW, main, parse_args, run
 from src.core import cache as cache_store
+from src.core.groups import load_group_users
 from src.core import tracker as tracker_service
 from src.core.errors import TrackerError
 from src.oj.atcoder import AtCoderAdapter
@@ -406,39 +408,32 @@ class CliOutputColorTest(unittest.TestCase):
     """Verify colored CLI output and multi-contest orchestration behavior."""
 
     def test_run_expands_ranges_in_input_order_and_updates_cache_once_per_user(self) -> None:
-        """Verify range tokens expand in order while each user cache is updated once."""
-        class FakeAdapter:
-            name = "atcoder"
+        """Verify CLI rendering preserves the established colors for emitted events."""
+        fake_events = [
+            CheckEvent(kind="checking_user", message="checking user alice ..."),
+            CheckEvent(kind="checking_user", message="checking user bob ..."),
+            CheckEvent(kind="contest_miss", message="no users have done abc402"),
+            CheckEvent(kind="contest_hit", message="alice done abc403"),
+            CheckEvent(kind="contest_hit", message="bob done abc404"),
+        ]
 
-            def expand_contest_token(self, token: str) -> list[str]:
-                mapping = {
-                    "abc402": ["abc402"],
-                    "abc403-abc404": ["abc403", "abc404"],
-                }
-                return mapping[token]
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+            self.assertEqual(oj, "atcoder")
+            self.assertEqual(group, "example")
+            self.assertEqual(contest_tokens, ["abc402", "abc403-abc404"])
+            self.assertFalse(refresh_cache)
+            for event in fake_events:
+                reporter(event)
+            return None
 
         stdout = io.StringIO()
         with (
-            patch("src.cli.get_adapter", return_value=FakeAdapter()),
-            patch("src.cli.load_group_users", return_value=["alice", "bob"]),
-            patch("src.cli.cache.ensure_cache_dir_exists"),
-            patch(
-                "src.cli.tracker.update_user_cache",
-                side_effect=[
-                    {"submissions": [{"id": 1}]},
-                    {"submissions": []},
-                ],
-            ) as mock_update_user_cache,
-            patch(
-                "src.cli.tracker.cache_has_done_contest",
-                side_effect=[False, False, True, False, False, True],
-            ),
+            patch("src.cli.run_check", side_effect=fake_run_check),
             redirect_stdout(stdout),
         ):
             exit_code = run(["--oj", "atcoder", "-c", "abc402", "abc403-abc404", "-g", "example"])
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(mock_update_user_cache.call_count, 2)
         lines = stdout.getvalue().splitlines()
         self.assertEqual(lines[0], f"{ANSI_YELLOW}checking user alice ...{ANSI_RESET}")
         self.assertEqual(lines[1], f"{ANSI_YELLOW}checking user bob ...{ANSI_RESET}")
@@ -447,22 +442,24 @@ class CliOutputColorTest(unittest.TestCase):
         self.assertEqual(lines[4], f"{ANSI_RED}bob done abc404{ANSI_RESET}")
 
     def test_run_colors_no_hit_result_in_green_for_each_expanded_contest(self) -> None:
-        """Verify each expanded contest without hits emits its own green status line."""
-        class FakeAdapter:
-            name = "cf"
+        """Verify the green no-hit color is preserved for each emitted miss event."""
+        fake_events = [
+            CheckEvent(kind="contest_miss", message="no users have done 2065"),
+            CheckEvent(kind="contest_miss", message="no users have done 2066"),
+        ]
 
-            def expand_contest_token(self, token: str) -> list[int]:
-                if token == "2065-2066":
-                    return [2065, 2066]
-                raise AssertionError(f"unexpected token: {token}")
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+            self.assertEqual(oj, "cf")
+            self.assertEqual(group, "example")
+            self.assertEqual(contest_tokens, ["2065-2066"])
+            self.assertFalse(refresh_cache)
+            for event in fake_events:
+                reporter(event)
+            return None
 
         stdout = io.StringIO()
         with (
-            patch("src.cli.get_adapter", return_value=FakeAdapter()),
-            patch("src.cli.load_group_users", return_value=["tourist"]),
-            patch("src.cli.cache.ensure_cache_dir_exists"),
-            patch("src.cli.tracker.update_user_cache", return_value={"submissions": []}),
-            patch("src.cli.tracker.cache_has_done_contest", side_effect=[False, False]),
+            patch("src.cli.run_check", side_effect=fake_run_check),
             redirect_stdout(stdout),
         ):
             exit_code = run(["--oj", "cf", "-c", "2065-2066", "-g", "example"])
@@ -474,9 +471,22 @@ class CliOutputColorTest(unittest.TestCase):
 
     def test_run_rejects_non_numeric_cf_contest_in_multi_contest_input(self) -> None:
         """Verify Codeforces contest input rejects any non-numeric token or range."""
-        with patch("src.cli.get_adapter", return_value=CodeforcesAdapter()):
-            with self.assertRaises(TrackerError):
+        with self.assertRaises(TrackerError):
+            run_check_payload = {}
+
+            def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+                del group
+                del refresh_cache
+                del reporter
+                run_check_payload["oj"] = oj
+                run_check_payload["contest_tokens"] = contest_tokens
+                raise TrackerError("for --oj cf, --contest must be a pure numeric contestId")
+
+            with patch("src.cli.run_check", side_effect=fake_run_check):
                 run(["--oj", "cf", "-c", "2065", "abc403-abc405", "-g", "example"])
+
+        self.assertEqual(run_check_payload["oj"], "cf")
+        self.assertEqual(run_check_payload["contest_tokens"], ["2065", "abc403-abc405"])
 
     def test_main_colors_tracker_error_in_red_stderr(self) -> None:
         """Verify CLI domain errors are rendered to stderr using the error color."""

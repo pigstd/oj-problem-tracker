@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from pathlib import Path
-from typing import Any
 
-from src.core import cache
-from src.core import tracker
+from src.core.checks import CheckEvent, run_check
 from src.core.errors import TrackerError
-from src.oj.base import ContestKey, OJAdapter
-from src.oj.registry import available_oj_names, get_adapter
+from src.oj.registry import available_oj_names
 from src.output import ANSI_GREEN, ANSI_RED, ANSI_RESET, ANSI_YELLOW, print_colored
 
 
@@ -46,81 +41,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _expand_target_contests(adapter: OJAdapter, contest_tokens: list[str]) -> list[ContestKey]:
-    """Expand raw CLI contest tokens into a flat ordered contest list."""
-    target_contests: list[ContestKey] = []
-    for token in contest_tokens:
-        target_contests.extend(adapter.expand_contest_token(token))
-    return target_contests
+_EVENT_COLORS = {
+    "checking_user": ANSI_YELLOW,
+    "cache_hit": ANSI_YELLOW,
+    "updating_cache": ANSI_YELLOW,
+    "contest_hit": ANSI_RED,
+    "contest_miss": ANSI_GREEN,
+}
 
 
-def _validate_group_users(data: Any, group_file: Path) -> dict[str, list[str]]:
-    """Validate the per-OJ user lists loaded from a group JSON file."""
-    if not isinstance(data, dict):
-        raise TrackerError(f"invalid group format in {group_file}: root must be an object")
-
-    users_by_oj: dict[str, list[str]] = {}
-    for oj in available_oj_names():
-        users = data.get(oj)
-        if users is None:
-            raise TrackerError(f"invalid group format in {group_file}: missing '{oj}' field")
-        if not isinstance(users, list):
-            raise TrackerError(f"invalid group format in {group_file}: '{oj}' must be a list")
-        if not all(isinstance(user, str) and user.strip() for user in users):
-            raise TrackerError(
-                f"invalid group format in {group_file}: every '{oj}' user must be a non-empty string"
-            )
-        users_by_oj[oj] = users
-
-    return users_by_oj
-
-
-def load_group_users(group_name: str, oj: str) -> list[str]:
-    """Load and validate the selected OJ user list from a group file."""
-    group_file = Path("usergroup") / f"{group_name}.json"
-    if not group_file.exists():
-        raise TrackerError(f"group file not found: {group_file}")
-
-    try:
-        with group_file.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-    except json.JSONDecodeError as exc:
-        raise TrackerError(f"invalid JSON in group file {group_file}: {exc}") from exc
-    except OSError as exc:
-        raise TrackerError(f"cannot read group file {group_file}: {exc}") from exc
-
-    users_by_oj = _validate_group_users(data, group_file)
-    users = users_by_oj[oj]
-    if not users:
-        raise TrackerError(f"invalid group format in {group_file}: '{oj}' must not be empty")
-
-    return users
+def _print_cli_event(event: CheckEvent) -> None:
+    """Render one structured event using the CLI's historical colors."""
+    color = _EVENT_COLORS.get(event.kind, ANSI_YELLOW)
+    print_colored(event.message, color)
 
 
 def run(argv: list[str] | None = None) -> int:
     """Run the CLI workflow by refreshing caches once and checking each requested contest."""
     args = parse_args(argv)
-    adapter = get_adapter(args.oj)
-    target_contests = _expand_target_contests(adapter, args.contest)
-    users = load_group_users(args.group, args.oj)
-    cache.ensure_cache_dir_exists(adapter.name)
-
-    user_caches: dict[str, dict[str, Any]] = {}
-    for user_id in users:
-        print_colored(f"checking user {user_id} ...", ANSI_YELLOW)
-        user_caches[user_id] = tracker.update_user_cache(adapter, user_id, args.refresh_cache)
-
-    for target_contest in target_contests:
-        contest_label = str(target_contest)
-        found_any = False
-        for user_id in users:
-            if tracker.cache_has_done_contest(adapter, user_caches[user_id]["submissions"], target_contest):
-                print_colored(f"{user_id} done {contest_label}", ANSI_RED)
-                found_any = True
-
-        if not found_any:
-            print_colored(f"no users have done {contest_label}", ANSI_GREEN)
-
+    run_check(
+        args.oj,
+        args.group,
+        args.contest,
+        args.refresh_cache,
+        reporter=_print_cli_event,
+    )
     return 0
 
 
