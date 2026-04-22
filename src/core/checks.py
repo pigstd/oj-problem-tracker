@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, TypeAlias
 
 from src.core import cache, tracker
-from src.core.groups import load_group_users
+from src.core.groups import GroupUsersByOJ, get_group_users_for_oj, load_group_users
 from src.oj.base import ContestKey, TargetContestSelection
 from src.oj.registry import get_adapter
 
@@ -112,6 +112,17 @@ def _select_target_contests(
     return select_target_contests(target_contests, selected_contest_types=contest_types)
 
 
+def _resolve_group_users(
+    group: str,
+    oj: str,
+    group_users_by_oj: GroupUsersByOJ | None,
+) -> list[str]:
+    """Return the selected OJ users from either an inline payload or a named group file."""
+    if group_users_by_oj is not None:
+        return get_group_users_for_oj(group_users_by_oj, oj, source=f"group '{group}'")
+    return load_group_users(group, oj)
+
+
 def run_check(
     oj: str,
     group: str,
@@ -119,12 +130,13 @@ def run_check(
     refresh_cache: bool,
     *,
     contest_types: list[str] | None = None,
+    group_users_by_oj: GroupUsersByOJ | None = None,
     reporter: EventReporter | None = None,
 ) -> CheckRunResult:
     """Run one structured check so CLI and web can share the same workflow."""
     adapter = get_adapter(oj)
     target_contests = _expand_target_contests(contest_tokens, adapter)
-    users = load_group_users(group, oj)
+    users = _resolve_group_users(group, oj, group_users_by_oj)
     events: list[CheckEvent] = []
     contest_summaries: list[ContestCheckSummary] = []
     user_caches: dict[str, dict[str, Any]] = {}

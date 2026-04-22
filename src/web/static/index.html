@@ -32,11 +32,21 @@
             </fieldset>
 
             <div class="field-block">
-              <label class="field-label" for="group-select">Group</label>
+              <div class="field-label-row">
+                <label class="field-label" for="group-select">Group</label>
+                <span class="field-caption">Stored in this browser only.</span>
+              </div>
               <div class="group-row">
                 <select id="group-select" name="group"></select>
                 <button id="group-view-button" class="secondary-button" type="button">View</button>
+                <button id="group-edit-button" class="secondary-button" type="button">Edit</button>
               </div>
+              <div class="group-actions">
+                <button id="group-new-button" class="tertiary-button" type="button">New</button>
+                <button id="group-import-button" class="tertiary-button" type="button">Import JSON</button>
+                <button id="group-delete-button" class="tertiary-button" type="button">Delete</button>
+              </div>
+              <input id="group-import-input" type="file" accept=".json,application/json" hidden />
             </div>
 
             <div class="field-block">
@@ -97,7 +107,7 @@
             <button id="submit-button" class="submit-button" type="submit">Start Check</button>
           </form>
 
-          <div id="group-errors" class="notice-stack" hidden></div>
+          <div id="group-notice" class="notice warning" hidden></div>
           <div id="form-error" class="notice error" hidden></div>
         </section>
 
@@ -132,7 +142,7 @@
       >
         <div class="modal-header">
           <div>
-            <p class="modal-kicker">Group Detail</p>
+            <p id="group-modal-kicker" class="modal-kicker">Group Detail</p>
             <h2 id="group-modal-title">Group</h2>
           </div>
           <button
@@ -145,6 +155,7 @@
           </button>
         </div>
         <div id="group-modal-content" class="modal-content"></div>
+        <div id="group-modal-actions" class="modal-actions"></div>
       </section>
     </div>
 

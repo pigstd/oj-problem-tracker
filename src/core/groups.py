@@ -2,34 +2,64 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 
 from src.core.errors import TrackerError
 from src.oj.registry import available_oj_names
 
 
 GROUP_ROOT = Path("usergroup")
+GroupUsersByOJ: TypeAlias = dict[str, list[str]]
 
 
-def _validate_group_users(data: Any, group_file: Path) -> dict[str, list[str]]:
-    """Validate the per-OJ user lists loaded from a group JSON file."""
+def _format_group_source(source: str | Path) -> str:
+    """Return a readable source label for group validation errors."""
+    return str(source)
+
+
+def validate_group_users_payload(
+    data: Any,
+    *,
+    source: str | Path = "group payload",
+) -> GroupUsersByOJ:
+    """Validate one group payload regardless of whether it came from disk or memory."""
+    source_label = _format_group_source(source)
     if not isinstance(data, dict):
-        raise TrackerError(f"invalid group format in {group_file}: root must be an object")
+        raise TrackerError(f"invalid group format in {source_label}: root must be an object")
 
-    users_by_oj: dict[str, list[str]] = {}
+    users_by_oj: GroupUsersByOJ = {}
     for oj in available_oj_names():
         users = data.get(oj)
         if users is None:
-            raise TrackerError(f"invalid group format in {group_file}: missing '{oj}' field")
+            raise TrackerError(f"invalid group format in {source_label}: missing '{oj}' field")
         if not isinstance(users, list):
-            raise TrackerError(f"invalid group format in {group_file}: '{oj}' must be a list")
-        if not all(isinstance(user, str) and user.strip() for user in users):
-            raise TrackerError(
-                f"invalid group format in {group_file}: every '{oj}' user must be a non-empty string"
-            )
-        users_by_oj[oj] = users
+            raise TrackerError(f"invalid group format in {source_label}: '{oj}' must be a list")
+
+        normalized_users: list[str] = []
+        for user in users:
+            if not isinstance(user, str) or not user.strip():
+                raise TrackerError(
+                    f"invalid group format in {source_label}: every '{oj}' user must be a non-empty string"
+                )
+            normalized_users.append(user.strip())
+        users_by_oj[oj] = normalized_users
 
     return users_by_oj
+
+
+def _require_non_empty_oj_users(
+    users_by_oj: GroupUsersByOJ,
+    oj: str,
+    *,
+    source: str | Path,
+) -> list[str]:
+    """Return one OJ's users and reject empty lists for the selected OJ."""
+    users = users_by_oj[oj]
+    if not users:
+        raise TrackerError(
+            f"invalid group format in {_format_group_source(source)}: '{oj}' must not be empty"
+        )
+    return list(users)
 
 
 def get_group_file_path(group_name: str) -> Path:
@@ -51,18 +81,24 @@ def load_group(group_name: str) -> dict[str, list[str]]:
     except OSError as exc:
         raise TrackerError(f"cannot read group file {group_file}: {exc}") from exc
 
-    return _validate_group_users(data, group_file)
+    return validate_group_users_payload(data, source=group_file)
+
+
+def get_group_users_for_oj(
+    group_users_by_oj: GroupUsersByOJ,
+    oj: str,
+    *,
+    source: str | Path = "group payload",
+) -> list[str]:
+    """Validate one in-memory group payload and return the selected OJ users."""
+    users_by_oj = validate_group_users_payload(group_users_by_oj, source=source)
+    return _require_non_empty_oj_users(users_by_oj, oj, source=source)
 
 
 def load_group_users(group_name: str, oj: str) -> list[str]:
     """Load and validate the selected OJ user list from a group file."""
     users_by_oj = load_group(group_name)
-    users = users_by_oj[oj]
-    if not users:
-        raise TrackerError(
-            f"invalid group format in {get_group_file_path(group_name)}: '{oj}' must not be empty"
-        )
-    return users
+    return _require_non_empty_oj_users(users_by_oj, oj, source=get_group_file_path(group_name))
 
 
 def get_group_detail(group_name: str) -> dict[str, Any]:

@@ -6,12 +6,19 @@
 
 两者共享同一条主流程：
 
-1. 从 `usergroup/<group>.json` 读取所选 OJ 的用户列表。
+1. 解析 group 输入源，并拿到所选 OJ 的用户列表。
 2. 解析并展开 `--contest` 里的查询 token。
 3. 对支持的 OJ，先把展开后的比赛按“目标比赛类型”做筛选或标记跳过。
 4. 为本轮仍需检查的用户更新一次本地缓存。
 5. 按展开后的目标比赛做精确命中检查。
 6. 对支持的 OJ 追加 warning 级别的补充判定。
+
+当前 group 输入源规则：
+
+- CLI 兼容 `usergroup/<group>.json`
+- CLI 也支持任意 JSON 文件、inline JSON 字符串、以及显式传入 `atcoder` / `cf` 用户列表
+- Web 不再读取服务器 `usergroup/`，而是由浏览器把当前 group 的完整用户列表放进请求体
+- Web 的 group 定义只存浏览器 `localStorage`，不会为查询流程临时写回服务器硬盘
 
 ## Contest Token 工作流
 
@@ -100,9 +107,14 @@ Codeforces 当前支持的类型：
 
 - `src/cli.py`
   - 参数解析
-  - group 文件读取
+  - group 输入源解析与校验
   - contest token 展开
   - 主流程调度和输出
+
+- `src/core/groups.py`
+  - group JSON 结构校验
+  - 兼容旧的 group 文件读取
+  - 从内存 group payload 中提取所选 OJ 用户列表
 
 - `src/core/cache.py`
   - 缓存读写
@@ -129,6 +141,11 @@ Codeforces 当前支持的类型：
 
 - `src/oj/registry.py`
   - `oj` 名称到 adapter 的映射
+
+- `src/web/server.py`
+  - 校验 Web 请求体中的 `group_users`
+  - 启动后台检查任务
+  - 提供运行轮询接口
 
 ## 文档导航
 

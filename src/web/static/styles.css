@@ -126,6 +126,13 @@ textarea {
   gap: 8px;
 }
 
+.field-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .contest-type-fieldset {
   margin: 0;
   padding: 0;
@@ -140,6 +147,11 @@ textarea {
 .field-label,
 .refresh-toggle span {
   font-weight: 700;
+}
+
+.field-caption {
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
 .oj-fieldset {
@@ -183,8 +195,14 @@ textarea {
 
 .group-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
+}
+
+.group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 select,
@@ -591,6 +609,10 @@ textarea {
   overflow-y: auto;
 }
 
+.modal-content.editor-mode {
+  display: block;
+}
+
 .modal-group {
   display: grid;
   gap: 12px;
@@ -612,6 +634,77 @@ textarea {
   font-size: 0.86rem;
 }
 
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.editor-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.editor-user-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.editor-user-input,
+.editor-name-input {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.editable-user-list {
+  min-height: 48px;
+}
+
+.removable-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip-remove {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(152, 50, 42, 0.2);
+  border-radius: 999px;
+  padding: 0;
+  color: var(--danger);
+  background: rgba(152, 50, 42, 0.08);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chip-remove:hover,
+.chip-remove:focus-visible {
+  background: rgba(152, 50, 42, 0.14);
+  border-color: rgba(152, 50, 42, 0.28);
+  outline: none;
+}
+
+.editor-empty {
+  color: var(--text-muted);
+}
+
 @media (max-width: 1080px) {
   body {
     overflow: auto;
@@ -629,6 +722,11 @@ textarea {
   }
 
   .contest-type-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .group-row,
+  .editor-grid {
     grid-template-columns: 1fr;
   }
 

@@ -81,6 +81,56 @@ class StructuredCheckServiceTest(unittest.TestCase):
         )
         self.assertEqual(result.to_dict()["events"][0]["message"], "checking user alice ...")
 
+    def test_run_check_accepts_inline_group_users_without_loading_group_files(self) -> None:
+        """Verify inline group payloads bypass the legacy group-file loader."""
+
+        class FakeAdapter:
+            name = "atcoder"
+
+            def prepare_run(self, refresh_cache: bool, *, status_callback=None) -> None:
+                del refresh_cache
+                del status_callback
+
+            def expand_contest_token(self, token: str) -> list[str]:
+                return [token]
+
+            def submission_matches_contest(self, submission: dict, contest: str) -> bool:
+                return submission.get("contest_id") == contest
+
+            def find_warning_matches(self, submissions: list[dict], contest: str) -> list[str]:
+                del submissions
+                del contest
+                return []
+
+        def fake_update_user_cache(adapter, user_id, refresh_cache, *, status_callback=None, emit_output=True):
+            del adapter
+            del refresh_cache
+            del status_callback
+            del emit_output
+            return {"submissions": [{"contest_id": "abc403"}]}
+
+        with (
+            patch("src.core.checks.get_adapter", return_value=FakeAdapter()),
+            patch("src.core.checks.load_group_users") as load_group_users,
+            patch("src.core.checks.cache.ensure_cache_dir_exists"),
+            patch("src.core.checks.tracker.update_user_cache", side_effect=fake_update_user_cache),
+        ):
+            result = run_check(
+                "atcoder",
+                "local-demo",
+                ["abc403"],
+                False,
+                group_users_by_oj={
+                    "atcoder": ["alice"],
+                    "cf": [],
+                },
+            )
+
+        load_group_users.assert_not_called()
+        self.assertEqual(result.group, "local-demo")
+        self.assertEqual(result.users, ["alice"])
+        self.assertEqual(result.contest_summaries[0].matched_users, ["alice"])
+
     def test_run_check_emits_warning_for_same_round_sibling_match(self) -> None:
         """Verify same-round sibling matches emit both miss and warning results."""
 

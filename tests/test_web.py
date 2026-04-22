@@ -57,18 +57,23 @@ class WebApiTest(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.original_cwd = Path.cwd()
         os.chdir(self.tmpdir.name)
-        Path("usergroup").mkdir(parents=True, exist_ok=True)
-        Path("usergroup/example.json").write_text(
-            json.dumps({"atcoder": ["alice"], "cf": ["tourist", "Petr"]}),
-            encoding="utf-8",
-        )
         self.check_calls: list[dict[str, object]] = []
 
-        def fake_check_runner(oj, group, contest_tokens, refresh_cache, *, contest_types=None, reporter=None):
+        def fake_check_runner(
+            oj,
+            group,
+            contest_tokens,
+            refresh_cache,
+            *,
+            contest_types=None,
+            group_users_by_oj=None,
+            reporter=None,
+        ):
             self.check_calls.append(
                 {
                     "oj": oj,
                     "group": group,
+                    "group_users_by_oj": group_users_by_oj,
                     "contest_tokens": list(contest_tokens),
                     "refresh_cache": refresh_cache,
                     "contest_types": contest_types,
@@ -139,22 +144,11 @@ class WebApiTest(unittest.TestCase):
         os.chdir(self.original_cwd)
         self.tmpdir.cleanup()
 
-    def test_groups_endpoint_lists_valid_group_counts(self) -> None:
-        """Verify the group listing endpoint exposes names and per-OJ counts."""
+    def test_removed_group_endpoints_now_return_not_found(self) -> None:
+        """Verify the web API no longer exposes server-side group listing routes."""
         payload = self._get_json("/api/groups")
 
-        self.assertEqual(payload["groups"][0]["name"], "example")
-        self.assertEqual(payload["groups"][0]["counts"]["atcoder"], 1)
-        self.assertEqual(payload["groups"][0]["counts"]["cf"], 2)
-        self.assertEqual(payload["errors"], [])
-
-    def test_group_detail_endpoint_returns_full_group_members(self) -> None:
-        """Verify the group-detail endpoint returns both OJ user lists for the modal."""
-        payload = self._get_json("/api/groups/example")
-
-        self.assertEqual(payload["group"]["name"], "example")
-        self.assertEqual(payload["group"]["users"]["atcoder"], ["alice"])
-        self.assertEqual(payload["group"]["users"]["cf"], ["tourist", "Petr"])
+        self.assertEqual(payload["error"]["message"], "route not found")
 
     def test_check_endpoint_runs_in_background_and_can_be_polled(self) -> None:
         """Verify a started run transitions to a completed polling snapshot."""
@@ -163,7 +157,11 @@ class WebApiTest(unittest.TestCase):
                 "/api/check",
                 {
                     "oj": "atcoder",
-                    "group": "example",
+                    "group": "example-local",
+                    "group_users": {
+                        "atcoder": ["alice"],
+                        "cf": ["tourist", "Petr"],
+                    },
                     "contest_tokens": ["abc403"],
                     "refresh_cache": False,
                 },
@@ -183,6 +181,8 @@ class WebApiTest(unittest.TestCase):
 
         self.assertIsNotNone(snapshot)
         self.assertEqual(snapshot["status"], "completed")
+        self.assertEqual(snapshot["request"]["group"], "example-local")
+        self.assertEqual(snapshot["request"]["group_users"]["atcoder"], ["alice"])
         self.assertEqual(snapshot["result"]["contest_summaries"][0]["matched_users"], ["alice"])
         self.assertEqual(
             snapshot["result"]["contest_summaries"][0]["warnings"][0]["warning_contests"],
@@ -191,6 +191,11 @@ class WebApiTest(unittest.TestCase):
         self.assertEqual(snapshot["events"][0]["kind"], "updating_contest_catalog")
         self.assertEqual(snapshot["events"][1]["kind"], "checking_user")
         self.assertEqual(snapshot["events"][2]["contest_id"], "abc403")
+        self.assertEqual(self.check_calls[0]["group"], "example-local")
+        self.assertEqual(
+            self.check_calls[0]["group_users_by_oj"],
+            {"atcoder": ["alice"], "cf": ["tourist", "Petr"]},
+        )
         self.assertEqual(self.check_calls[0]["contest_types"], None)
 
     def test_check_endpoint_accepts_cf_contest_type_filters(self) -> None:
@@ -200,7 +205,11 @@ class WebApiTest(unittest.TestCase):
                 "/api/check",
                 {
                     "oj": "cf",
-                    "group": "example",
+                    "group": "example-local",
+                    "group_users": {
+                        "atcoder": ["alice"],
+                        "cf": ["tourist", "Petr"],
+                    },
                     "contest_tokens": ["2065"],
                     "contest_types": ["div1", "DIV2", "div1"],
                     "refresh_cache": False,
@@ -221,6 +230,25 @@ class WebApiTest(unittest.TestCase):
         self.assertEqual(self.check_calls[-1]["oj"], "cf")
         self.assertEqual(self.check_calls[-1]["contest_types"], ["div1", "div2"])
 
+    def test_check_endpoint_rejects_missing_group_users_payload(self) -> None:
+        """Verify the API requires explicit local-group users in every check request."""
+        payload = self._json_response_from_request(
+            self._post_request(
+                "/api/check",
+                {
+                    "oj": "atcoder",
+                    "group": "example-local",
+                    "contest_tokens": ["abc403"],
+                    "refresh_cache": False,
+                },
+            )
+        )
+
+        self.assertEqual(
+            payload["error"]["message"],
+            "invalid request payload: 'group_users' must be an object",
+        )
+
     def test_check_endpoint_rejects_legacy_contest_field_payload(self) -> None:
         """Verify the API only accepts the documented contest_tokens request field."""
         payload = self._json_response_from_request(
@@ -228,7 +256,11 @@ class WebApiTest(unittest.TestCase):
                 "/api/check",
                 {
                     "oj": "atcoder",
-                    "group": "example",
+                    "group": "example-local",
+                    "group_users": {
+                        "atcoder": ["alice"],
+                        "cf": ["tourist", "Petr"],
+                    },
                     "contest": "abc403 abc404",
                     "refresh_cache": False,
                 },
@@ -247,7 +279,11 @@ class WebApiTest(unittest.TestCase):
                 "/api/check",
                 {
                     "oj": "cf",
-                    "group": "example",
+                    "group": "example-local",
+                    "group_users": {
+                        "atcoder": ["alice"],
+                        "cf": ["tourist", "Petr"],
+                    },
                     "contest_tokens": ["2065"],
                     "contest_types": [],
                     "refresh_cache": False,
@@ -267,7 +303,11 @@ class WebApiTest(unittest.TestCase):
                 "/api/check",
                 {
                     "oj": "atcoder",
-                    "group": "example",
+                    "group": "example-local",
+                    "group_users": {
+                        "atcoder": ["alice"],
+                        "cf": ["tourist", "Petr"],
+                    },
                     "contest_tokens": ["abc403"],
                     "contest_types": ["div1"],
                     "refresh_cache": False,
@@ -289,6 +329,11 @@ class WebApiTest(unittest.TestCase):
         self.assertIn("<h2>Log</h2>", html)
         self.assertIn("<h2>Result</h2>", html)
         self.assertIn('id="group-view-button"', html)
+        self.assertIn('id="group-edit-button"', html)
+        self.assertIn('id="group-new-button"', html)
+        self.assertIn('id="group-import-button"', html)
+        self.assertIn('id="group-delete-button"', html)
+        self.assertIn('id="group-import-input"', html)
         self.assertIn('id="group-modal"', html)
         self.assertIn('id="cf-contest-type-fieldset"', html)
         self.assertIn('id="contest-type-select-all"', html)
@@ -307,6 +352,8 @@ class WebApiTest(unittest.TestCase):
         self.assertIn("overflow-y: auto;", styles)
         self.assertIn("slice(-3).reverse()", script)
         self.assertIn(".contest-type-grid {", styles)
+        self.assertIn(".group-actions {", styles)
+        self.assertIn(".editor-grid {", styles)
         self.assertIn(".badge.skipped {", styles)
         self.assertIn("contest_warning", styles)
         self.assertIn("contest_skipped", styles)
@@ -315,6 +362,9 @@ class WebApiTest(unittest.TestCase):
         self.assertIn("Possible same-round matches", script)
         self.assertIn("Select at least one Codeforces contest type", script)
         self.assertIn("getSelectedContestTypes()", script)
+        self.assertIn("localStorage", script)
+        self.assertIn("group_users", script)
+        self.assertNotIn('"/api/groups"', script)
         self.assertNotIn('"Starting"', script)
         self.assertNotIn("userResults", script)
 

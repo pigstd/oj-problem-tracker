@@ -8,9 +8,9 @@ Supported OJ: AtCoder and Codeforces.
 
 - Python 3.10+
 
-## Prepare Group File
+## Group Inputs
 
-Create a group file in `usergroup/`, for example `usergroup/example.json`:
+The project accepts the same group JSON structure everywhere:
 
 ```json
 {
@@ -19,6 +19,22 @@ Create a group file in `usergroup/`, for example `usergroup/example.json`:
 }
 ```
 
+Web UI behavior:
+
+- The web page does not read server-side `usergroup/` files anymore.
+- Groups are created, imported, edited, and deleted in the browser.
+- The current browser stores them in `localStorage` and sends `group_users` with each check request.
+- Querying from the web UI does not write group definitions back to server disk.
+
+CLI group input modes:
+
+- Legacy file mode: `-g/--group example` reads `usergroup/example.json`
+- Arbitrary JSON file: `--group-json-file path/to/group.json`
+- Inline JSON string: `--group-json '{"atcoder":["alice"],"cf":["tourist"]}'`
+- Explicit user lists: `--atcoder-user alice bob --cf-user tourist`
+
+For inline modes, `--group-name` controls the display label shown in results.
+
 ## Usage
 
 Run the localhost web UI:
@@ -26,6 +42,8 @@ Run the localhost web UI:
 ```bash
 python3 oj-web.py
 ```
+
+Then create or import a group in the browser before starting a check.
 
 Check AtCoder users in a group for explicit contests:
 
@@ -75,6 +93,24 @@ Gym contests work the same way because Codeforces still matches on numeric `cont
 python3 oj-problem-tracker.py --oj cf -c 104059 104060-104062 -g example
 ```
 
+Check users from an arbitrary JSON file without using `usergroup/`:
+
+```bash
+python3 oj-problem-tracker.py --oj atcoder -c abc403 --group-json-file ./team.json
+```
+
+Check users from inline JSON:
+
+```bash
+python3 oj-problem-tracker.py --oj cf -c 2065 --group-json '{"atcoder":[],"cf":["tourist","Petr"]}' --group-name inline-team
+```
+
+Check users from explicit CLI user lists:
+
+```bash
+python3 oj-problem-tracker.py --oj atcoder -c abc403-abc406 --group-name local-demo --atcoder-user alice bob charlie
+```
+
 Force refresh cache:
 
 ```bash
@@ -106,6 +142,9 @@ Codeforces contest type filter rules:
 
 Web UI notes:
 
+- Before the first run, create or import a local group in the browser.
+- The page stores groups in browser `localStorage`, not in server-side `usergroup/`.
+- `View`, `Edit`, `New`, `Import JSON`, and `Delete` all operate on local browser groups.
 - In the `cf` form, the page shows a `Contest Type` multi-select area.
 - It supports `Select all` and `Clear all`.
 - If no Codeforces contest type is selected, the page blocks submission.

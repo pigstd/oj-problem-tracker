@@ -55,9 +55,39 @@
 
 ### Group
 
-- 使用下拉框选择 `usergroup/<group>.json`
-- `Group` 右侧放置一个 `View` 按钮
-- 若当前没有选中 group，`View` 按钮禁用
+当前 Web 前端的 group 完全由浏览器本地维护，不读取服务器 `usergroup/`。
+
+当前设计：
+
+- 使用下拉框选择浏览器 `localStorage` 中的命名 group
+- `Group` 区域显示 `Stored in this browser only.`
+- `Group` 右侧放置 `View` 和 `Edit` 按钮
+- 下方放置 `New`、`Import JSON`、`Delete` 按钮
+- 若当前没有选中 group，则 `View`、`Edit`、`Delete` 和 `Start Check` 禁用
+
+当前支持的 group 操作：
+
+- 新建空 group
+- 从 JSON 导入 group
+- 手动编辑 group 名称
+- 分别为 `atcoder` / `cf` 手动添加和删除用户
+- 删除当前本地 group
+
+JSON 导入格式沿用项目原有 group 结构：
+
+```json
+{
+  "atcoder": ["alice"],
+  "cf": ["tourist", "Petr"]
+}
+```
+
+当前规则：
+
+- group 只保存在当前浏览器的 `localStorage`
+- Web 查询时总是把完整 `group_users` 放进请求体，不通过 group 名称回查服务器文件
+- 从浏览器发起查询不会把 group 定义写入服务器硬盘
+- 若所选 OJ 在当前 group 下没有用户，前端会阻止提交
 
 ### Contest Token
 
@@ -95,7 +125,7 @@
 
 `Input` 模块底部保留两类提示：
 
-- group 文件扫描错误
+- 本地 group / 浏览器存储相关提示
 - 表单提交或轮询过程中的错误
 
 ## Group View 弹窗
@@ -122,9 +152,15 @@
 
 数据来源：
 
-- `GET /api/groups/{name}`
+- 直接读取当前浏览器里的本地 group 数据
 
-前端会对已查看过的 group 做一次内存缓存，避免重复请求。
+当前实现还会复用同一个弹窗承载编辑状态：
+
+- `Edit` 或 `New` 会切换到 group 编辑表单
+- 弹窗内可修改 group 名称
+- 两个 OJ 各自有独立的用户添加区
+- 现有用户以可删除的 chip 列表展示
+- `Save Group` 会写回 `localStorage`
 
 ## Log 模块
 
@@ -177,10 +213,10 @@
 
 页面加载后：
 
-1. 请求 `GET /api/groups`
+1. 从浏览器 `localStorage` 读取本地 group 列表
 2. 填充 group 下拉框
-3. 渲染 group 扫描错误
-4. 若没有可用 group，则禁用提交按钮并显示错误
+3. 恢复上次选中的 group
+4. 若没有可用 group，则禁用提交按钮并显示提示
 
 ### 发起检查
 
@@ -188,12 +224,14 @@
 
 1. 读取当前 `OJ`、`Group`、`Contest Token`、`refresh_cache`
 2. 若当前是 `cf`，额外读取 `Contest Type`
-3. 若当前是 `cf` 且一个类型都没选，则阻止提交
-4. 调用 `POST /api/check`
-5. 若成功，拿到 `run_id`
-6. 轮询 `GET /api/runs/{id}`
-7. 用返回的 `events` 更新 `Log`
-8. 用返回的 `contest_summaries` 更新 `Result`
+3. 读取当前 group 的完整 `group_users`
+4. 若所选 OJ 没有用户，则阻止提交
+5. 若当前是 `cf` 且一个类型都没选，则阻止提交
+6. 调用 `POST /api/check`
+7. 若成功，拿到 `run_id`
+8. 轮询 `GET /api/runs/{id}`
+9. 用返回的 `events` 更新 `Log`
+10. 用返回的 `contest_summaries` 更新 `Result`
 
 ### 并发运行限制
 
@@ -208,12 +246,9 @@
 
 当前前端依赖以下接口：
 
-- `GET /api/groups`
-  - 返回 group 名称和各 OJ 的人数摘要
-- `GET /api/groups/{name}`
-  - 返回指定 group 的完整用户列表
 - `POST /api/check`
   - 发起一次检查任务
+  - 请求体必须包含 `group_users`
   - 请求体中的 `contest_types` 只对 `cf` 生效；省略时等价于全部类型
 - `GET /api/runs/{id}`
   - 返回运行状态、最近事件、contest 精确结果和 warning 结果
@@ -221,6 +256,7 @@
 ## 当前实现约束
 
 - Web 界面定位为单机 `localhost` 使用
+- group 只存浏览器本地，不做账户同步，也不回写服务器文件
 - 后端只允许一个运行中的任务
 - CLI 和 Web 共用同一套检查逻辑
 - 桌面端页面固定单屏
@@ -234,6 +270,7 @@
 - 不恢复 `User Cache Status`
 - 不把 `Log` 改回完整长列表
 - 不把 group 详情直接嵌入主页面，仍然优先使用弹窗
+- 不重新引入服务器 `usergroup/` 扫描与 Web group 列表接口
 - `Result` 仍然保持 contest 级展示，而不是回到用户级缓存状态展示
 - Codeforces warning 继续作为附加信息展示，而不是替代精确命中结果
 - Codeforces 比赛类型筛选继续放在 `Input` 面板中，不单独拆成第四栏

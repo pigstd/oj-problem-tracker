@@ -10,11 +10,11 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
 
 from src.core.checks import CheckEvent, CheckRunResult, run_check
 from src.core.errors import TrackerError
-from src.core.groups import get_group_detail, list_group_summaries
+from src.core.groups import validate_group_users_payload
 from src.oj.cf import normalize_selected_contest_types
 from src.oj.registry import available_oj_names
 
@@ -67,6 +67,7 @@ def _normalize_check_request(payload: dict[str, Any]) -> dict[str, Any]:
     """Validate and normalize a web check request payload."""
     oj = payload.get("oj")
     group = payload.get("group")
+    group_users = payload.get("group_users")
     contest_tokens = payload.get("contest_tokens")
     contest_types = payload.get("contest_types")
     refresh_cache = payload.get("refresh_cache", False)
@@ -75,6 +76,8 @@ def _normalize_check_request(payload: dict[str, Any]) -> dict[str, Any]:
         raise TrackerError(f"invalid request payload: 'oj' must be one of {available_oj_names()}")
     if not isinstance(group, str) or not group.strip():
         raise TrackerError("invalid request payload: 'group' must be a non-empty string")
+    if group_users is None:
+        raise TrackerError("invalid request payload: 'group_users' must be an object")
 
     if not isinstance(contest_tokens, list) or not contest_tokens:
         raise TrackerError("invalid request payload: 'contest_tokens' must be a non-empty string list")
@@ -94,17 +97,11 @@ def _normalize_check_request(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "oj": oj,
         "group": group.strip(),
+        "group_users": validate_group_users_payload(group_users, source="request group_users"),
         "contest_tokens": [token.strip() for token in contest_tokens],
         "contest_types": normalize_selected_contest_types(oj, contest_types),
         "refresh_cache": refresh_cache,
     }
-
-
-def _error_status_for_group_error(exc: TrackerError) -> int:
-    """Map group-loading failures to the most appropriate HTTP status."""
-    if str(exc).startswith("group file not found:"):
-        return HTTPStatus.NOT_FOUND
-    return HTTPStatus.BAD_REQUEST
 
 
 class RunManager:
@@ -177,6 +174,7 @@ class RunManager:
                 request_payload["contest_tokens"],
                 request_payload["refresh_cache"],
                 contest_types=request_payload["contest_types"],
+                group_users_by_oj=request_payload["group_users"],
                 reporter=lambda event: self._append_event(run_id, event),
             )
         except TrackerError as exc:
@@ -263,23 +261,6 @@ class TrackerRequestHandler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/static/"):
             static_name = parsed.path.removeprefix("/static/")
             self._serve_static_asset(static_name)
-            return
-        if parsed.path == "/api/groups":
-            groups, errors = list_group_summaries()
-            _json_response(self, HTTPStatus.OK, {"groups": groups, "errors": errors})
-            return
-        if parsed.path.startswith("/api/groups/"):
-            group_name = unquote(parsed.path.removeprefix("/api/groups/"))
-            try:
-                detail = get_group_detail(group_name)
-            except TrackerError as exc:
-                _json_response(
-                    self,
-                    _error_status_for_group_error(exc),
-                    {"error": {"message": str(exc)}},
-                )
-                return
-            _json_response(self, HTTPStatus.OK, {"group": detail})
             return
         if parsed.path.startswith("/api/runs/"):
             run_id = parsed.path.removeprefix("/api/runs/")

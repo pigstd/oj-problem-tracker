@@ -687,6 +687,43 @@ class InputValidationTest(unittest.TestCase):
 
         self.assertEqual(args.only, ["div1", "div2"])
 
+    def test_parse_args_accepts_inline_group_json_flags(self) -> None:
+        """Verify argparse accepts the new inline JSON group input flags."""
+        args = parse_args(
+            [
+                "--oj",
+                "atcoder",
+                "-c",
+                "abc403",
+                "--group-json",
+                '{"atcoder":["alice"],"cf":[]}',
+                "--group-name",
+                "inline-demo",
+            ]
+        )
+
+        self.assertEqual(args.group_json, '{"atcoder":["alice"],"cf":[]}')
+        self.assertEqual(args.group_name, "inline-demo")
+
+    def test_parse_args_accepts_inline_user_lists(self) -> None:
+        """Verify argparse collects explicit per-OJ user arguments for inline groups."""
+        args = parse_args(
+            [
+                "--oj",
+                "atcoder",
+                "-c",
+                "abc403",
+                "--atcoder-user",
+                "alice",
+                "bob",
+                "--cf-user",
+                "tourist",
+            ]
+        )
+
+        self.assertEqual(args.atcoder_user, ["alice", "bob"])
+        self.assertEqual(args.cf_user, ["tourist"])
+
     def test_normalize_selected_contest_types_expands_and_validates_values(self) -> None:
         """Verify contest-type normalization applies the shared CLI and web rules."""
         self.assertEqual(normalize_selected_contest_types("cf", None), list(CF_CONTEST_TYPES))
@@ -919,6 +956,117 @@ class CliOutputColorTest(unittest.TestCase):
         self.assertEqual(captured["contest_tokens"], ["2065"])
         self.assertFalse(captured["refresh_cache"])
         self.assertEqual(captured["contest_types"], ["div1", "div2"])
+
+    def test_run_accepts_inline_user_groups_without_usergroup_files(self) -> None:
+        """Verify explicit per-OJ user arguments are forwarded as an inline group payload."""
+        captured: dict[str, object] = {}
+
+        def fake_run_check(
+            oj,
+            group,
+            contest_tokens,
+            refresh_cache,
+            *,
+            contest_types=None,
+            group_users_by_oj=None,
+            reporter=None,
+        ):
+            del reporter
+            captured["oj"] = oj
+            captured["group"] = group
+            captured["contest_tokens"] = contest_tokens
+            captured["refresh_cache"] = refresh_cache
+            captured["contest_types"] = contest_types
+            captured["group_users_by_oj"] = group_users_by_oj
+            return None
+
+        with patch("src.cli.run_check", side_effect=fake_run_check):
+            exit_code = run(
+                [
+                    "--oj",
+                    "atcoder",
+                    "-c",
+                    "abc403",
+                    "--group-name",
+                    "local-demo",
+                    "--atcoder-user",
+                    "alice",
+                    "bob",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(captured["oj"], "atcoder")
+        self.assertEqual(captured["group"], "local-demo")
+        self.assertEqual(captured["contest_tokens"], ["abc403"])
+        self.assertFalse(captured["refresh_cache"])
+        self.assertIsNone(captured["contest_types"])
+        self.assertEqual(
+            captured["group_users_by_oj"],
+            {"atcoder": ["alice", "bob"], "cf": []},
+        )
+
+    def test_run_accepts_inline_group_json_payload(self) -> None:
+        """Verify inline JSON groups are parsed and passed into the shared check service."""
+        captured: dict[str, object] = {}
+
+        def fake_run_check(
+            oj,
+            group,
+            contest_tokens,
+            refresh_cache,
+            *,
+            contest_types=None,
+            group_users_by_oj=None,
+            reporter=None,
+        ):
+            del reporter
+            captured["oj"] = oj
+            captured["group"] = group
+            captured["contest_tokens"] = contest_tokens
+            captured["refresh_cache"] = refresh_cache
+            captured["contest_types"] = contest_types
+            captured["group_users_by_oj"] = group_users_by_oj
+            return None
+
+        with patch("src.cli.run_check", side_effect=fake_run_check):
+            exit_code = run(
+                [
+                    "--oj",
+                    "cf",
+                    "-c",
+                    "2065",
+                    "--group-json",
+                    '{"atcoder":["alice"],"cf":["tourist","Petr"]}',
+                    "--group-name",
+                    "inline-json",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(captured["oj"], "cf")
+        self.assertEqual(captured["group"], "inline-json")
+        self.assertEqual(captured["contest_types"], list(CF_CONTEST_TYPES))
+        self.assertEqual(
+            captured["group_users_by_oj"],
+            {"atcoder": ["alice"], "cf": ["tourist", "Petr"]},
+        )
+
+    def test_run_rejects_multiple_group_input_modes(self) -> None:
+        """Verify exactly one group input source must be selected for each CLI run."""
+        with self.assertRaises(TrackerError):
+            run(
+                [
+                    "--oj",
+                    "atcoder",
+                    "-c",
+                    "abc403",
+                    "-g",
+                    "example",
+                    "--group-json",
+                    '{"atcoder":["alice"],"cf":[]}',
+                ]
+            )
 
     def test_run_colors_skipped_contest_in_yellow(self) -> None:
         """Verify skipped contest events use the warning color in CLI output."""

@@ -32,6 +32,8 @@ python3 -m unittest discover -s tests -v
 
 - `--contest` 多值解析
 - `--only` 多值解析
+- CLI inline group JSON 参数解析
+- CLI inline 用户列表参数解析
 - Codeforces 单点 token 校验
 - Codeforces 区间 token 展开
 - Codeforces 非法区间拒绝
@@ -45,6 +47,7 @@ python3 -m unittest discover -s tests -v
 - Codeforces contest 匹配 `contestId` 数值相等
 - Codeforces 同场 sibling warning 判定
 - Codeforces 目标比赛类型过滤与 `skipped` 结果
+- shared check service 支持 inline `group_users`
 - 单点与区间混合输入时，每个用户缓存只更新一次
 - 展开后的 contest 顺序与 CLI 输入顺序一致
 - 每个展开后的 contest 都输出独立结果
@@ -62,7 +65,10 @@ python3 -m unittest discover -s tests -v
 
 ### Web
 
+- `POST /api/check` 必须带 `group_users`
 - `POST /api/check` 的 `contest_types` 校验
+- Web 不再暴露 `/api/groups*`
+- 浏览器 `localStorage` group 管理 UI
 - Codeforces 比赛类型多选 UI
 - `Result` 中的 `Skipped` contest 卡片
 - `Log` 中 `contest_skipped` 事件样式
