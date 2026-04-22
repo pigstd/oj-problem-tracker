@@ -12,17 +12,53 @@ from typing import Any
 
 from src.core import cache as cache_store
 from src.core.errors import TrackerError
-from src.oj.base import ContestKey, OJAdapter, StatusReporter
+from src.oj.base import ContestKey, OJAdapter, StatusReporter, TargetContestSelection
 
 
 API_BASE = "https://codeforces.com/api/user.status"
 CONTEST_LIST_API_BASE = "https://codeforces.com/api/contest.list"
-CONTEST_CATALOG_CACHE_VERSION = 1
+CONTEST_CATALOG_CACHE_VERSION = 2
 MAX_CONSECUTIVE_FAILURES = 5
 REQUEST_INTERVAL_SECONDS = 2
 PAGE_SIZE = 1000
 USER_AGENT = "oj-problem-tracker/1.0 (+https://github.com/)"
 CONTEST_RANGE_PATTERN = re.compile(r"^(?P<start>\d+)-(?P<end>\d+)$")
+EDUCATIONAL_ROUND_PATTERN = re.compile(r"Educational Codeforces Round", re.IGNORECASE)
+HELLO_ROUND_PATTERN = re.compile(r"\bHello\b", re.IGNORECASE)
+GOOD_BYE_ROUND_PATTERN = re.compile(r"\bGood\s*Bye\b", re.IGNORECASE)
+DIVISION_PATTERN = re.compile(r"Div\.\s*(?P<division>[1-4])", re.IGNORECASE)
+
+CF_CONTEST_TYPE_ALL = "all"
+CF_CONTEST_TYPES = ("div1", "div2", "div1+2", "div3", "div4", "others")
+CF_CONTEST_TYPE_CHOICES = (CF_CONTEST_TYPE_ALL, *CF_CONTEST_TYPES)
+
+
+def normalize_selected_contest_types(oj: str, contest_types: list[str] | None) -> list[str] | None:
+    """Normalize CLI and web contest-type selections into the shared internal form."""
+    if contest_types is None:
+        return list(CF_CONTEST_TYPES) if oj == "cf" else None
+
+    normalized_types: list[str] = []
+    for contest_type in contest_types:
+        normalized_type = contest_type.strip().casefold()
+        if normalized_type not in CF_CONTEST_TYPE_CHOICES:
+            expected = ", ".join(CF_CONTEST_TYPE_CHOICES)
+            raise TrackerError(f"invalid contest type filter: {contest_type}; expected one of {expected}")
+        if normalized_type not in normalized_types:
+            normalized_types.append(normalized_type)
+
+    if oj != "cf":
+        if normalized_types == [CF_CONTEST_TYPE_ALL]:
+            return None
+        raise TrackerError("contest type filtering is only supported for --oj cf")
+
+    if CF_CONTEST_TYPE_ALL in normalized_types:
+        return list(CF_CONTEST_TYPES)
+
+    if not normalized_types:
+        raise TrackerError("for --oj cf, --only must include at least one contest type")
+
+    return normalized_types
 
 
 class CodeforcesAdapter(OJAdapter):
@@ -32,6 +68,7 @@ class CodeforcesAdapter(OJAdapter):
     def __init__(self) -> None:
         """Track the per-run contest start-time catalog used for warning detection."""
         self._contest_start_times: dict[int, int] = {}
+        self._contest_names: dict[int, str] = {}
 
     def prepare_run(
         self,
@@ -40,7 +77,7 @@ class CodeforcesAdapter(OJAdapter):
         status_callback: StatusReporter | None = None,
     ) -> None:
         """Load the contest catalog cache once so warning checks stay per-run scoped."""
-        self._contest_start_times = self._load_or_refresh_contest_catalog(
+        self._contest_start_times, self._contest_names = self._load_or_refresh_contest_catalog(
             refresh_cache,
             status_callback=status_callback,
         )
@@ -120,6 +157,57 @@ class CodeforcesAdapter(OJAdapter):
                 warning_matches.append(sibling_contest)
 
         return warning_matches
+
+    def select_target_contests(
+        self,
+        contests: list[ContestKey],
+        *,
+        selected_contest_types: list[str] | None = None,
+    ) -> list[TargetContestSelection]:
+        """Apply Codeforces contest-type filtering to the expanded target contests."""
+        if selected_contest_types is None or set(selected_contest_types) == set(CF_CONTEST_TYPES):
+            return [TargetContestSelection(contest=contest) for contest in contests]
+
+        selected_type_set = set(selected_contest_types)
+        selected_type_label = ", ".join(selected_contest_types)
+        selections: list[TargetContestSelection] = []
+
+        for contest in contests:
+            if not isinstance(contest, int):
+                raise TrackerError("internal error: cf target contest must be int")
+
+            contest_type = self._get_contest_type(contest)
+            if contest_type is None:
+                selections.append(
+                    TargetContestSelection(
+                        contest=contest,
+                        status="skipped",
+                        skip_reason="contest type could not be determined from contest catalog",
+                    )
+                )
+                continue
+
+            if contest_type in selected_type_set:
+                selections.append(
+                    TargetContestSelection(
+                        contest=contest,
+                        contest_type=contest_type,
+                    )
+                )
+                continue
+
+            selections.append(
+                TargetContestSelection(
+                    contest=contest,
+                    status="skipped",
+                    contest_type=contest_type,
+                    skip_reason=(
+                        f"contest type {contest_type} is not in selected types {selected_type_label}"
+                    ),
+                )
+            )
+
+        return selections
 
     def _fetch_full_submissions(self, handle: str) -> list[Any]:
         """Fetch every submission page for a handle and deduplicate by submission ID."""
@@ -221,7 +309,7 @@ class CodeforcesAdapter(OJAdapter):
         refresh_cache: bool,
         *,
         status_callback: StatusReporter | None = None,
-    ) -> dict[int, int]:
+    ) -> tuple[dict[int, int], dict[int, str]]:
         """Load the contest catalog cache and refresh it when the cache policy requires."""
         existing_cache = self._load_contest_catalog_cache()
 
@@ -230,7 +318,10 @@ class CodeforcesAdapter(OJAdapter):
             and existing_cache is not None
             and cache_store.should_skip_cache_update(existing_cache["last_updated_at"])
         ):
-            return self._contest_start_times_from_cache(existing_cache)
+            return (
+                self._contest_start_times_from_cache(existing_cache),
+                self._contest_names_from_cache(existing_cache),
+            )
 
         if status_callback is not None:
             status_callback("updating_contest_catalog", "updating contest catalog for cf ...")
@@ -244,7 +335,10 @@ class CodeforcesAdapter(OJAdapter):
                         "contest_catalog_warning",
                         f"warning: failed to refresh contest catalog for cf, using cached catalog: {exc}",
                     )
-                return self._contest_start_times_from_cache(existing_cache)
+                return (
+                    self._contest_start_times_from_cache(existing_cache),
+                    self._contest_names_from_cache(existing_cache),
+                )
             raise TrackerError(
                 f"failed to load contest catalog for cf and no cached catalog is available: {exc}"
             ) from exc
@@ -256,12 +350,14 @@ class CodeforcesAdapter(OJAdapter):
             "contests": [
                 {
                     "id": contest["id"],
+                    "name": contest["name"],
                     "startTimeSeconds": contest["startTimeSeconds"],
                 }
                 for contest in contests
             ],
         }
         contest_start_times = self._contest_start_times_from_cache(contest_cache)
+        contest_names = self._contest_names_from_cache(contest_cache)
 
         try:
             self._write_contest_catalog_cache(contest_cache)
@@ -275,7 +371,7 @@ class CodeforcesAdapter(OJAdapter):
                     ),
                 )
 
-        return contest_start_times
+        return contest_start_times, contest_names
 
     def _get_contest_catalog_cache_file_path(self) -> Path:
         """Return the shared contest catalog cache path for Codeforces."""
@@ -317,6 +413,8 @@ class CodeforcesAdapter(OJAdapter):
                 return None
             if not isinstance(contest.get("id"), int):
                 return None
+            if not isinstance(contest.get("name"), str):
+                return None
             if not isinstance(contest.get("startTimeSeconds"), int):
                 return None
 
@@ -350,6 +448,45 @@ class CodeforcesAdapter(OJAdapter):
             and isinstance(contest.get("id"), int)
             and isinstance(contest.get("startTimeSeconds"), int)
         }
+
+    def _contest_names_from_cache(self, cache_data: dict[str, Any]) -> dict[int, str]:
+        """Convert cached contest metadata into an ID-to-name lookup table."""
+        return {
+            contest["id"]: contest["name"]
+            for contest in cache_data["contests"]
+            if isinstance(contest, dict)
+            and isinstance(contest.get("id"), int)
+            and isinstance(contest.get("name"), str)
+        }
+
+    def _get_contest_type(self, contest: int) -> str | None:
+        """Return the normalized contest type for one Codeforces contest ID."""
+        contest_name = self._contest_names.get(contest)
+        if contest_name is None:
+            return None
+        return self._classify_contest_name(contest_name)
+
+    def _classify_contest_name(self, contest_name: str) -> str:
+        """Classify a Codeforces contest title into one of the supported filter buckets."""
+        if HELLO_ROUND_PATTERN.search(contest_name) is not None:
+            return "div1+2"
+        if GOOD_BYE_ROUND_PATTERN.search(contest_name) is not None:
+            return "div1+2"
+        if EDUCATIONAL_ROUND_PATTERN.search(contest_name) is not None:
+            return "div2"
+
+        divisions = {match.group("division") for match in DIVISION_PATTERN.finditer(contest_name)}
+        if {"1", "2"}.issubset(divisions):
+            return "div1+2"
+        if "4" in divisions:
+            return "div4"
+        if "3" in divisions:
+            return "div3"
+        if "2" in divisions:
+            return "div2"
+        if "1" in divisions:
+            return "div1"
+        return "others"
 
     def _fetch_contests_with_retry(self) -> list[dict[str, Any]]:
         """Retry contest.list until a valid contest array is returned or retries are exhausted."""
@@ -407,6 +544,7 @@ class CodeforcesAdapter(OJAdapter):
             if (
                 isinstance(contest, dict)
                 and isinstance(contest.get("id"), int)
+                and isinstance(contest.get("name"), str)
                 and isinstance(contest.get("startTimeSeconds"), int)
             ):
                 contests.append(contest)

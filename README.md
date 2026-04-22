@@ -39,6 +39,18 @@ Check Codeforces users in a group for an inclusive contest range:
 python3 oj-problem-tracker.py --oj cf -c 2065-2068 -g example
 ```
 
+Check only selected Codeforces contest types:
+
+```bash
+python3 oj-problem-tracker.py --oj cf -c 2065 2067-2070 -g example --only div1 div2
+```
+
+Check only Educational / Div. 2 style Codeforces rounds:
+
+```bash
+python3 oj-problem-tracker.py --oj cf -c 2065-2090 -g example --only div2
+```
+
 Check AtCoder users in a group for an inclusive contest range:
 
 ```bash
@@ -79,9 +91,24 @@ Contest token rules:
 
 - `--contest` accepts one or more tokens.
 - A token can be a single contest ID such as `2065` or `abc403`.
-- Codeforces ranges use numeric closed intervals such as `2065-2070`.
-- AtCoder ranges use the same prefix plus numeric suffix, such as `abc300-abc305`.
+- You can use `-` to express an inclusive contest range.
+- For Codeforces, numeric ranges such as `100-200` and `2065-2070` are supported.
+- For AtCoder, ranges use the same prefix plus numeric suffix, such as `abc300-abc305`.
 - Tokens are expanded in input order and checked one contest at a time after caches are refreshed.
+
+Codeforces contest type filter rules:
+
+- `--only` is supported only when `--oj cf`.
+- If `--only` is omitted, the program behaves as if all Codeforces contest types are selected.
+- Supported values are `div1`, `div2`, `div1+2`, `div3`, `div4`, and `others`.
+- `Educational Codeforces Round` is treated as `div2`.
+- The filter applies to target contests only. Same-round warning detection still works for kept contests.
+
+Web UI notes:
+
+- In the `cf` form, the page shows a `Contest Type` multi-select area.
+- It supports `Select all` and `Clear all`.
+- If no Codeforces contest type is selected, the page blocks submission.
 
 ## APIs
 
@@ -119,6 +146,10 @@ Request pacing:
 - Cache hit without update: `cache hit, skip update for <user_id>`
 - For each contest, a hit is printed as `<user_id> done <contest_id>`
 - If nobody in the group has done a contest, print `no users have done <contest_id>`
+- If a target contest is filtered out, print `skip <contest_id>: ...`
+- For Codeforces, same-round sibling matches are shown as warning lines and do not become normal hits
+
+In the web UI, filtered-out contests are kept in `Result` with status `Skipped`.
 
 ## Design Docs
 

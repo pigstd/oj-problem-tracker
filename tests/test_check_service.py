@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from src.core.checks import run_check
+from src.oj.base import TargetContestSelection
 
 
 class StructuredCheckServiceTest(unittest.TestCase):
@@ -178,3 +179,63 @@ class StructuredCheckServiceTest(unittest.TestCase):
             [event.kind for event in emitted_events],
             ["updating_contest_catalog", "checking_user", "cache_hit", "contest_miss"],
         )
+
+    def test_run_check_skips_filtered_contests_without_touching_user_cache_when_none_are_selected(self) -> None:
+        """Verify fully skipped contest selections do not trigger user-cache refreshes."""
+
+        class FakeAdapter:
+            name = "cf"
+
+            def prepare_run(self, refresh_cache: bool, *, status_callback=None) -> None:
+                del refresh_cache
+                del status_callback
+
+            def expand_contest_token(self, token: str) -> list[int]:
+                return [int(token)]
+
+            def select_target_contests(self, contests: list[int], *, selected_contest_types=None):
+                self.selected_contest_types = selected_contest_types
+                return [
+                    TargetContestSelection(
+                        contest=contest,
+                        status="skipped",
+                        contest_type="div2",
+                        skip_reason="contest type div2 is not in selected types div1",
+                    )
+                    for contest in contests
+                ]
+
+            def submission_matches_contest(self, submission: dict, contest: int) -> bool:
+                del submission
+                del contest
+                return False
+
+            def find_warning_matches(self, submissions: list[dict], contest: int) -> list[int]:
+                del submissions
+                del contest
+                return []
+
+        emitted_events = []
+        with (
+            patch("src.core.checks.get_adapter", return_value=FakeAdapter()),
+            patch("src.core.checks.load_group_users", return_value=["tourist"]),
+            patch("src.core.checks.cache.ensure_cache_dir_exists"),
+            patch("src.core.checks.tracker.update_user_cache") as update_user_cache,
+        ):
+            result = run_check(
+                "cf",
+                "example",
+                ["2065"],
+                False,
+                contest_types=["div1"],
+                reporter=emitted_events.append,
+            )
+
+        update_user_cache.assert_not_called()
+        self.assertEqual(result.contest_summaries[0].status, "skipped")
+        self.assertEqual(result.contest_summaries[0].contest_type, "div2")
+        self.assertEqual(
+            result.contest_summaries[0].skip_reason,
+            "contest type div2 is not in selected types div1",
+        )
+        self.assertEqual([event.kind for event in emitted_events], ["contest_skipped"])

@@ -5,7 +5,7 @@ from typing import Any, Callable, TypeAlias
 
 from src.core import cache, tracker
 from src.core.groups import load_group_users
-from src.oj.base import ContestKey
+from src.oj.base import ContestKey, TargetContestSelection
 from src.oj.registry import get_adapter
 
 
@@ -49,6 +49,9 @@ class ContestCheckSummary:
     contest_id: str
     matched_users: list[str]
     warnings: list[ContestWarningSummary]
+    status: str = "checked"
+    contest_type: str | None = None
+    skip_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable contest summary."""
@@ -56,6 +59,9 @@ class ContestCheckSummary:
             "contest_id": self.contest_id,
             "matched_users": list(self.matched_users),
             "warnings": [warning.to_dict() for warning in self.warnings],
+            "status": self.status,
+            "contest_type": self.contest_type,
+            "skip_reason": self.skip_reason,
         }
 
 
@@ -94,12 +100,25 @@ def _expand_target_contests(contest_tokens: list[str], adapter: Any) -> list[Con
     return target_contests
 
 
+def _select_target_contests(
+    target_contests: list[ContestKey],
+    adapter: Any,
+    contest_types: list[str] | None,
+) -> list[TargetContestSelection]:
+    """Return the checked-or-skipped contest selections for one run."""
+    select_target_contests = getattr(adapter, "select_target_contests", None)
+    if select_target_contests is None:
+        return [TargetContestSelection(contest=contest) for contest in target_contests]
+    return select_target_contests(target_contests, selected_contest_types=contest_types)
+
+
 def run_check(
     oj: str,
     group: str,
     contest_tokens: list[str],
     refresh_cache: bool,
     *,
+    contest_types: list[str] | None = None,
     reporter: EventReporter | None = None,
 ) -> CheckRunResult:
     """Run one structured check so CLI and web can share the same workflow."""
@@ -123,47 +142,73 @@ def run_check(
 
     cache.ensure_cache_dir_exists(adapter.name)
     adapter.prepare_run(refresh_cache, status_callback=on_prepare_status)
+    contest_selections = _select_target_contests(target_contests, adapter, contest_types)
+    checked_target_contests = [
+        selection.contest for selection in contest_selections if selection.status == "checked"
+    ]
 
-    for index, user_id in enumerate(users, start=1):
-        emit(
-            CheckEvent(
-                kind="checking_user",
-                message=f"checking user {user_id} ...",
-                user_id=user_id,
-                index=index,
-                total=total_users,
-            )
-        )
-
-        def on_cache_status(kind: str, message: str) -> None:
-            """Translate tracker cache status callbacks into structured events."""
+    if checked_target_contests:
+        for index, user_id in enumerate(users, start=1):
             emit(
                 CheckEvent(
-                    kind=kind,
-                    message=message,
+                    kind="checking_user",
+                    message=f"checking user {user_id} ...",
                     user_id=user_id,
                     index=index,
                     total=total_users,
                 )
             )
 
-        user_cache = tracker.update_user_cache(
-            adapter,
-            user_id,
-            refresh_cache,
-            status_callback=on_cache_status,
-            emit_output=False,
-        )
-        user_caches[user_id] = user_cache
+            def on_cache_status(kind: str, message: str) -> None:
+                """Translate tracker cache status callbacks into structured events."""
+                emit(
+                    CheckEvent(
+                        kind=kind,
+                        message=message,
+                        user_id=user_id,
+                        index=index,
+                        total=total_users,
+                    )
+                )
 
-    for target_contest in target_contests:
-        contest_label = str(target_contest)
+            user_cache = tracker.update_user_cache(
+                adapter,
+                user_id,
+                refresh_cache,
+                status_callback=on_cache_status,
+                emit_output=False,
+            )
+            user_caches[user_id] = user_cache
+
+    for contest_selection in contest_selections:
+        contest_label = str(contest_selection.contest)
+        if contest_selection.status == "skipped":
+            skip_reason = contest_selection.skip_reason or "contest was skipped"
+            emit(
+                CheckEvent(
+                    kind="contest_skipped",
+                    message=f"skip {contest_label}: {skip_reason}",
+                    contest_id=contest_label,
+                )
+            )
+            contest_summaries.append(
+                ContestCheckSummary(
+                    contest_id=contest_label,
+                    matched_users=[],
+                    warnings=[],
+                    status="skipped",
+                    contest_type=contest_selection.contest_type,
+                    skip_reason=skip_reason,
+                )
+            )
+            continue
+
         matched_users: list[str] = []
         warning_summaries: list[ContestWarningSummary] = []
 
         for user_id in users:
             submissions = user_caches[user_id]["submissions"]
-            if tracker.cache_has_done_contest(adapter, submissions, target_contest):
+            if tracker.cache_has_done_contest(adapter, submissions, contest_selection.contest):
                 matched_users.append(user_id)
                 emit(
                     CheckEvent(
@@ -177,7 +222,7 @@ def run_check(
 
             warning_contests = [
                 str(contest)
-                for contest in adapter.find_warning_matches(submissions, target_contest)
+                for contest in adapter.find_warning_matches(submissions, contest_selection.contest)
             ]
             if not warning_contests:
                 continue
@@ -219,6 +264,7 @@ def run_check(
                 contest_id=contest_label,
                 matched_users=matched_users,
                 warnings=warning_summaries,
+                contest_type=contest_selection.contest_type,
             )
         )
 

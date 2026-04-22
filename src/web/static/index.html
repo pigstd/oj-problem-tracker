@@ -49,6 +49,46 @@
               ></textarea>
             </div>
 
+            <fieldset id="cf-contest-type-fieldset" class="field-block contest-type-fieldset" hidden>
+              <legend>Contest Type</legend>
+              <div class="contest-type-heading">
+                <div class="contest-type-actions">
+                  <button id="contest-type-select-all" class="tertiary-button" type="button">
+                    Select all
+                  </button>
+                  <button id="contest-type-clear-all" class="tertiary-button" type="button">
+                    Clear all
+                  </button>
+                </div>
+              </div>
+              <div class="contest-type-grid">
+                <label class="contest-type-option">
+                  <input type="checkbox" name="contest_types" value="div1" checked />
+                  <span>Div. 1</span>
+                </label>
+                <label class="contest-type-option">
+                  <input type="checkbox" name="contest_types" value="div2" checked />
+                  <span>Div. 2</span>
+                </label>
+                <label class="contest-type-option">
+                  <input type="checkbox" name="contest_types" value="div1+2" checked />
+                  <span>Div. 1 + 2</span>
+                </label>
+                <label class="contest-type-option">
+                  <input type="checkbox" name="contest_types" value="div3" checked />
+                  <span>Div. 3</span>
+                </label>
+                <label class="contest-type-option">
+                  <input type="checkbox" name="contest_types" value="div4" checked />
+                  <span>Div. 4</span>
+                </label>
+                <label class="contest-type-option">
+                  <input type="checkbox" name="contest_types" value="others" checked />
+                  <span>Others</span>
+                </label>
+              </div>
+            </fieldset>
+
             <label class="refresh-toggle" for="refresh-cache">
               <input type="checkbox" id="refresh-cache" name="refresh_cache" />
               <span>Force refresh cache</span>

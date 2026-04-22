@@ -15,6 +15,7 @@ from urllib.parse import unquote, urlparse
 from src.core.checks import CheckEvent, CheckRunResult, run_check
 from src.core.errors import TrackerError
 from src.core.groups import get_group_detail, list_group_summaries
+from src.oj.cf import normalize_selected_contest_types
 from src.oj.registry import available_oj_names
 
 
@@ -67,6 +68,7 @@ def _normalize_check_request(payload: dict[str, Any]) -> dict[str, Any]:
     oj = payload.get("oj")
     group = payload.get("group")
     contest_tokens = payload.get("contest_tokens")
+    contest_types = payload.get("contest_types")
     refresh_cache = payload.get("refresh_cache", False)
 
     if not isinstance(oj, str) or oj not in available_oj_names():
@@ -78,6 +80,14 @@ def _normalize_check_request(payload: dict[str, Any]) -> dict[str, Any]:
         raise TrackerError("invalid request payload: 'contest_tokens' must be a non-empty string list")
     if not all(isinstance(token, str) and token.strip() for token in contest_tokens):
         raise TrackerError("invalid request payload: every contest token must be a non-empty string")
+    if contest_types is not None and not isinstance(contest_types, list):
+        raise TrackerError("invalid request payload: 'contest_types' must be a string list")
+    if contest_types is not None and not contest_types:
+        raise TrackerError("invalid request payload: 'contest_types' must be a non-empty string list")
+    if contest_types is not None and not all(
+        isinstance(contest_type, str) and contest_type.strip() for contest_type in contest_types
+    ):
+        raise TrackerError("invalid request payload: every contest type must be a non-empty string")
     if not isinstance(refresh_cache, bool):
         raise TrackerError("invalid request payload: 'refresh_cache' must be a boolean")
 
@@ -85,6 +95,7 @@ def _normalize_check_request(payload: dict[str, Any]) -> dict[str, Any]:
         "oj": oj,
         "group": group.strip(),
         "contest_tokens": [token.strip() for token in contest_tokens],
+        "contest_types": normalize_selected_contest_types(oj, contest_types),
         "refresh_cache": refresh_cache,
     }
 
@@ -165,6 +176,7 @@ class RunManager:
                 request_payload["group"],
                 request_payload["contest_tokens"],
                 request_payload["refresh_cache"],
+                contest_types=request_payload["contest_types"],
                 reporter=lambda event: self._append_event(run_id, event),
             )
         except TrackerError as exc:

@@ -8,9 +8,10 @@
 
 1. 从 `usergroup/<group>.json` 读取所选 OJ 的用户列表。
 2. 解析并展开 `--contest` 里的查询 token。
-3. 为每个用户更新一次本地缓存。
-4. 按展开后的目标比赛做精确命中检查。
-5. 对支持的 OJ 追加 warning 级别的补充判定。
+3. 对支持的 OJ，先把展开后的比赛按“目标比赛类型”做筛选或标记跳过。
+4. 为本轮仍需检查的用户更新一次本地缓存。
+5. 按展开后的目标比赛做精确命中检查。
+6. 对支持的 OJ 追加 warning 级别的补充判定。
 
 ## Contest Token 工作流
 
@@ -36,6 +37,32 @@ python3 oj-problem-tracker.py --oj cf -c 2065 2067-2069 -g example
 
 当前实现不会对展开后的结果做跨 token 去重。
 
+## 目标比赛类型筛选
+
+当前只有 Codeforces 支持目标比赛类型筛选。
+
+共享规则：
+
+- CLI 通过 `--only` 传入一个或多个类型，例如 `--only div1 div2`
+- 若未传 `--only`，则等价于 `--only all`
+- Web 端只在 `cf` 模式下显示比赛类型多选区域
+- 被筛掉的比赛不会参与精确命中检查，但仍然会保留在结果里，状态为 `skipped`
+
+Codeforces 当前支持的类型：
+
+- `div1`
+- `div2`
+- `div1+2`
+- `div3`
+- `div4`
+- `others`
+
+补充规则：
+
+- `Educational Codeforces Round` 归类为 `div2`
+- 同场 warning 仍然只看开始时间相同的相邻比赛，不受目标比赛类型筛选影响
+- 也就是说，若目标比赛本身被保留检查，则它仍然可能通过一个不同类型的同场 sibling contest 触发 warning
+
 ## 运行流程
 
 ### 阶段 1：缓存更新
@@ -52,7 +79,10 @@ python3 oj-problem-tracker.py --oj cf -c 2065 2067-2069 -g example
 
 ### 阶段 2：比赛命中检查
 
-完成所有用户缓存更新后，按展开后的 contest 顺序逐个检查：
+完成所有用户缓存更新后，按展开后的 contest 顺序逐个处理：
+
+- 若某个 contest 在筛选阶段被标记为 `skipped`，则输出 skip 事件并写入 skip 结果
+- 若某个 contest 仍然需要检查，则继续执行精确命中和 warning 判定
 
 - 对命中的用户输出 `<user_id> done <contest_id>`
 - 若某个比赛无人命中，输出 `no users have done <contest_id>`
@@ -86,6 +116,7 @@ python3 oj-problem-tracker.py --oj cf -c 2065 2067-2069 -g example
 - `src/oj/base.py`
   - `OJAdapter` 抽象接口
   - 包括 `validate_contest`、`expand_contest_token`、`update_submissions`、`submission_matches_contest`
+  - 也包括可选的 `select_target_contests` 钩子，用于把展开后的比赛标记为检查或跳过
 
 - `src/oj/atcoder.py`
   - AtCoder token 规则、抓取规则、命中规则
@@ -93,6 +124,7 @@ python3 oj-problem-tracker.py --oj cf -c 2065 2067-2069 -g example
 - `src/oj/cf.py`
   - Codeforces token 规则、抓取规则、命中规则
   - Codeforces 比赛目录缓存
+  - Codeforces 比赛标题到类型桶的归类逻辑
   - Codeforces 同场 warning 判定
 
 - `src/oj/registry.py`

@@ -8,7 +8,12 @@ const elements = {
   form: document.querySelector("#check-form"),
   groupSelect: document.querySelector("#group-select"),
   groupViewButton: document.querySelector("#group-view-button"),
+  ojInputs: document.querySelectorAll('input[name="oj"]'),
   contestInput: document.querySelector("#contest-input"),
+  contestTypeFieldset: document.querySelector("#cf-contest-type-fieldset"),
+  contestTypeInputs: document.querySelectorAll('input[name="contest_types"]'),
+  contestTypeSelectAll: document.querySelector("#contest-type-select-all"),
+  contestTypeClearAll: document.querySelector("#contest-type-clear-all"),
   refreshCache: document.querySelector("#refresh-cache"),
   submitButton: document.querySelector("#submit-button"),
   runStatus: document.querySelector("#run-status"),
@@ -87,6 +92,29 @@ function getSelectedOj() {
   return new FormData(elements.form).get("oj");
 }
 
+function getSelectedContestTypes() {
+  return Array.from(elements.contestTypeInputs)
+    .filter((input) => input.checked)
+    .map((input) => input.value);
+}
+
+function setSelectedContestTypes(contestTypes) {
+  const selectedTypes = new Set(contestTypes);
+  elements.contestTypeInputs.forEach((input) => {
+    input.checked = selectedTypes.has(input.value);
+  });
+}
+
+function updateContestTypeFieldsetState() {
+  const isCf = getSelectedOj() === "cf";
+  elements.contestTypeFieldset.hidden = !isCf;
+  elements.contestTypeInputs.forEach((input) => {
+    input.disabled = !isCf;
+  });
+  elements.contestTypeSelectAll.disabled = !isCf;
+  elements.contestTypeClearAll.disabled = !isCf;
+}
+
 function setSubmitting(isSubmitting) {
   elements.submitButton.disabled = isSubmitting;
   elements.submitButton.textContent = isSubmitting ? "Checking..." : "Start Check";
@@ -129,12 +157,31 @@ function renderContestResults(contestSummaries) {
   elements.contestResults.className = "result-list";
   elements.contestResults.innerHTML = contestSummaries
     .map((summary) => {
-      const hasMatches = summary.matched_users.length > 0;
+      const matchedUsers = summary.matched_users ?? [];
       const warnings = summary.warnings ?? [];
+      if (summary.status === "skipped") {
+        const contestTypeLabel = summary.contest_type
+          ? `Type: ${summary.contest_type}`
+          : "Type: unknown";
+        return `
+          <article class="result-card skipped">
+            <header>
+              <strong>${escapeHtml(summary.contest_id)}</strong>
+              <span class="badge skipped">Skipped</span>
+            </header>
+            <section class="skip-section">
+              <p class="skip-meta">${escapeHtml(contestTypeLabel)}</p>
+              <p>${escapeHtml(summary.skip_reason ?? "contest was skipped")}</p>
+            </section>
+          </article>
+        `;
+      }
+
+      const hasMatches = matchedUsers.length > 0;
       const badgeClass = hasMatches ? "hit" : "miss";
-      const badgeLabel = hasMatches ? `${summary.matched_users.length} hit` : "No hits";
+      const badgeLabel = hasMatches ? `${matchedUsers.length} hit` : "No hits";
       const detailMarkup = hasMatches
-        ? `<div class="user-list">${summary.matched_users
+        ? `<div class="user-list">${matchedUsers
             .map((user) => `<span class="user-chip">${escapeHtml(user)}</span>`)
             .join("")}</div>`
         : `<p>${escapeHtml(`no users have done ${summary.contest_id}`)}</p>`;
@@ -271,6 +318,13 @@ async function handleSubmit(event) {
     return;
   }
 
+  const isCf = getSelectedOj() === "cf";
+  const contestTypes = isCf ? getSelectedContestTypes() : null;
+  if (isCf && !contestTypes.length) {
+    renderFormError("Select at least one Codeforces contest type before starting a check.");
+    return;
+  }
+
   setSubmitting(true);
   setStatusPill("running", "Running");
   renderEventFeed([]);
@@ -286,6 +340,7 @@ async function handleSubmit(event) {
         oj: getSelectedOj(),
         group: elements.groupSelect.value,
         contest_tokens: contestTokens,
+        contest_types: contestTypes ?? undefined,
         refresh_cache: elements.refreshCache.checked,
       }),
     });
@@ -331,6 +386,15 @@ async function bootstrap() {
   elements.form.addEventListener("submit", handleSubmit);
   elements.groupViewButton.addEventListener("click", handleGroupView);
   elements.groupSelect.addEventListener("change", updateGroupViewButtonState);
+  elements.ojInputs.forEach((input) => {
+    input.addEventListener("change", updateContestTypeFieldsetState);
+  });
+  elements.contestTypeSelectAll.addEventListener("click", () => {
+    setSelectedContestTypes(Array.from(elements.contestTypeInputs).map((input) => input.value));
+  });
+  elements.contestTypeClearAll.addEventListener("click", () => {
+    setSelectedContestTypes([]);
+  });
   elements.groupModalClose.addEventListener("click", closeGroupModal);
   elements.groupModalBackdrop.addEventListener("click", closeGroupModal);
   document.addEventListener("keydown", (event) => {
@@ -342,6 +406,7 @@ async function bootstrap() {
   setStatusPill("idle", "Idle");
   renderEventFeed([]);
   renderContestResults([]);
+  updateContestTypeFieldsetState();
 
   try {
     const groupsPayload = await fetchJson("/api/groups");

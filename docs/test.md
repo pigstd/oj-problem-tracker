@@ -25,10 +25,13 @@ python3 -m unittest discover -s tests -v
 - Codeforces contest.list 目录缓存 24 小时内跳过刷新
 - Codeforces contest.list 目录缓存过期后刷新
 - Codeforces `--refresh-cache` 强制刷新比赛目录缓存
+- Codeforces 比赛标题分类到 `div1/div2/div1+2/div3/div4/others`
+- Codeforces contest type 选择标准化与非法值校验
 
 ### Contest Token 解析与展开
 
 - `--contest` 多值解析
+- `--only` 多值解析
 - Codeforces 单点 token 校验
 - Codeforces 区间 token 展开
 - Codeforces 非法区间拒绝
@@ -41,6 +44,7 @@ python3 -m unittest discover -s tests -v
 - AtCoder contest 匹配大小写不敏感
 - Codeforces contest 匹配 `contestId` 数值相等
 - Codeforces 同场 sibling warning 判定
+- Codeforces 目标比赛类型过滤与 `skipped` 结果
 - 单点与区间混合输入时，每个用户缓存只更新一次
 - 展开后的 contest 顺序与 CLI 输入顺序一致
 - 每个展开后的 contest 都输出独立结果
@@ -50,10 +54,18 @@ python3 -m unittest discover -s tests -v
 - `checking user ...`
 - `updating cache for ...`
 - `cache hit, skip update for ...`
+- `skip <contest_id>: ...`
 - 命中结果红色输出
 - 无命中结果绿色输出
 - warning 结果黄色输出
 - 错误信息输出到 stderr
+
+### Web
+
+- `POST /api/check` 的 `contest_types` 校验
+- Codeforces 比赛类型多选 UI
+- `Result` 中的 `Skipped` contest 卡片
+- `Log` 中 `contest_skipped` 事件样式
 
 ## 后续可以补的测试
 

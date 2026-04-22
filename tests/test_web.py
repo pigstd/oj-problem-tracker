@@ -62,8 +62,18 @@ class WebApiTest(unittest.TestCase):
             json.dumps({"atcoder": ["alice"], "cf": ["tourist", "Petr"]}),
             encoding="utf-8",
         )
+        self.check_calls: list[dict[str, object]] = []
 
-        def fake_check_runner(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+        def fake_check_runner(oj, group, contest_tokens, refresh_cache, *, contest_types=None, reporter=None):
+            self.check_calls.append(
+                {
+                    "oj": oj,
+                    "group": group,
+                    "contest_tokens": list(contest_tokens),
+                    "refresh_cache": refresh_cache,
+                    "contest_types": contest_types,
+                }
+            )
             reporter(
                 CheckEvent(
                     kind="updating_contest_catalog",
@@ -181,6 +191,35 @@ class WebApiTest(unittest.TestCase):
         self.assertEqual(snapshot["events"][0]["kind"], "updating_contest_catalog")
         self.assertEqual(snapshot["events"][1]["kind"], "checking_user")
         self.assertEqual(snapshot["events"][2]["contest_id"], "abc403")
+        self.assertEqual(self.check_calls[0]["contest_types"], None)
+
+    def test_check_endpoint_accepts_cf_contest_type_filters(self) -> None:
+        """Verify the web API forwards normalized Codeforces contest-type filters to the runner."""
+        created = self._json_response_from_request(
+            self._post_request(
+                "/api/check",
+                {
+                    "oj": "cf",
+                    "group": "example",
+                    "contest_tokens": ["2065"],
+                    "contest_types": ["div1", "DIV2", "div1"],
+                    "refresh_cache": False,
+                },
+            )
+        )
+
+        deadline = time.time() + 3
+        snapshot = None
+        while time.time() < deadline:
+            snapshot = self._json_response_from_request(self._get_request(f"/api/runs/{created['run_id']}"))
+            if snapshot["status"] == "completed":
+                break
+            time.sleep(0.05)
+
+        self.assertIsNotNone(snapshot)
+        self.assertEqual(snapshot["status"], "completed")
+        self.assertEqual(self.check_calls[-1]["oj"], "cf")
+        self.assertEqual(self.check_calls[-1]["contest_types"], ["div1", "div2"])
 
     def test_check_endpoint_rejects_legacy_contest_field_payload(self) -> None:
         """Verify the API only accepts the documented contest_tokens request field."""
@@ -201,6 +240,46 @@ class WebApiTest(unittest.TestCase):
             "invalid request payload: 'contest_tokens' must be a non-empty string list",
         )
 
+    def test_check_endpoint_rejects_empty_contest_type_list(self) -> None:
+        """Verify the API rejects a Codeforces request with no selected contest types."""
+        payload = self._json_response_from_request(
+            self._post_request(
+                "/api/check",
+                {
+                    "oj": "cf",
+                    "group": "example",
+                    "contest_tokens": ["2065"],
+                    "contest_types": [],
+                    "refresh_cache": False,
+                },
+            )
+        )
+
+        self.assertEqual(
+            payload["error"]["message"],
+            "invalid request payload: 'contest_types' must be a non-empty string list",
+        )
+
+    def test_check_endpoint_rejects_non_cf_specific_contest_type_filters(self) -> None:
+        """Verify contest-type filtering cannot be requested for non-Codeforces runs."""
+        payload = self._json_response_from_request(
+            self._post_request(
+                "/api/check",
+                {
+                    "oj": "atcoder",
+                    "group": "example",
+                    "contest_tokens": ["abc403"],
+                    "contest_types": ["div1"],
+                    "refresh_cache": False,
+                },
+            )
+        )
+
+        self.assertEqual(
+            payload["error"]["message"],
+            "contest type filtering is only supported for --oj cf",
+        )
+
     def test_index_page_uses_three_panel_layout_and_group_modal(self) -> None:
         """Verify the HTML layout exposes Input, Log, Result, and the group modal."""
         html = self._text_response_from_request(self._get_request("/"))
@@ -211,6 +290,9 @@ class WebApiTest(unittest.TestCase):
         self.assertIn("<h2>Result</h2>", html)
         self.assertIn('id="group-view-button"', html)
         self.assertIn('id="group-modal"', html)
+        self.assertIn('id="cf-contest-type-fieldset"', html)
+        self.assertIn('id="contest-type-select-all"', html)
+        self.assertIn('id="contest-type-clear-all"', html)
         self.assertNotIn("User Cache Status", html)
 
     def test_static_assets_limit_logs_and_keep_page_fixed(self) -> None:
@@ -224,10 +306,15 @@ class WebApiTest(unittest.TestCase):
         self.assertIn(".result-list {", styles)
         self.assertIn("overflow-y: auto;", styles)
         self.assertIn("slice(-3).reverse()", script)
+        self.assertIn(".contest-type-grid {", styles)
+        self.assertIn(".badge.skipped {", styles)
         self.assertIn("contest_warning", styles)
+        self.assertIn("contest_skipped", styles)
         self.assertIn("updating_contest_catalog", styles)
         self.assertIn("contest_catalog_warning", styles)
         self.assertIn("Possible same-round matches", script)
+        self.assertIn("Select at least one Codeforces contest type", script)
+        self.assertIn("getSelectedContestTypes()", script)
         self.assertNotIn('"Starting"', script)
         self.assertNotIn("userResults", script)
 

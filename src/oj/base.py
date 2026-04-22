@@ -1,12 +1,23 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, TypeAlias
 
 
 ContestKey: TypeAlias = str | int
 StatusReporter: TypeAlias = Callable[[str, str], None]
+
+
+@dataclass(slots=True)
+class TargetContestSelection:
+    """Describe whether one expanded contest should be checked or skipped."""
+
+    contest: ContestKey
+    status: str = "checked"
+    contest_type: str | None = None
+    skip_reason: str | None = None
 
 
 class OJAdapter(ABC):
@@ -54,3 +65,13 @@ class OJAdapter(ABC):
         del submissions
         del contest
         return []
+
+    def select_target_contests(
+        self,
+        contests: list[ContestKey],
+        *,
+        selected_contest_types: list[str] | None = None,
+    ) -> list[TargetContestSelection]:
+        """Return checked-or-skipped selections for the expanded target contest list."""
+        del selected_contest_types
+        return [TargetContestSelection(contest=contest) for contest in contests]

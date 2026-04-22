@@ -16,7 +16,7 @@ from src.core import tracker as tracker_service
 from src.core.errors import TrackerError
 from src.oj.atcoder import AtCoderAdapter
 from src.oj import cf as cf_module
-from src.oj.cf import CodeforcesAdapter
+from src.oj.cf import CF_CONTEST_TYPES, CodeforcesAdapter, normalize_selected_contest_types
 
 
 def _iso_utc_hours_ago(hours: int) -> str:
@@ -51,7 +51,14 @@ def _contest_catalog_payload(last_updated_at: str, contests: list[dict]) -> dict
         "version": cf_module.CONTEST_CATALOG_CACHE_VERSION,
         "oj": "cf",
         "last_updated_at": last_updated_at,
-        "contests": contests,
+        "contests": [
+            {
+                "id": contest["id"],
+                "name": contest.get("name", f"Codeforces Round {contest['id']} (Div. 2)"),
+                "startTimeSeconds": contest["startTimeSeconds"],
+            }
+            for contest in contests
+        ],
     }
 
 
@@ -303,8 +310,8 @@ class CacheBehaviorTest(unittest.TestCase):
         def fake_fetch_contests():
             calls["value"] += 1
             return [
-                {"id": 2065, "startTimeSeconds": 100},
-                {"id": 2066, "startTimeSeconds": 100},
+                {"id": 2065, "name": "Codeforces Round 1000 (Div. 1)", "startTimeSeconds": 100},
+                {"id": 2066, "name": "Codeforces Round 1000 (Div. 2)", "startTimeSeconds": 100},
             ]
 
         self.cf._fetch_contests_with_retry = fake_fetch_contests
@@ -324,8 +331,8 @@ class CacheBehaviorTest(unittest.TestCase):
         def fake_fetch_contests():
             call_order.append(("fetch", "contest.list"))
             return [
-                {"id": 2065, "startTimeSeconds": 100},
-                {"id": 2066, "startTimeSeconds": 100},
+                {"id": 2065, "name": "Codeforces Round 1000 (Div. 1)", "startTimeSeconds": 100},
+                {"id": 2066, "name": "Codeforces Round 1000 (Div. 2)", "startTimeSeconds": 100},
             ]
 
         self.cf._fetch_contests_with_retry = fake_fetch_contests
@@ -403,8 +410,8 @@ class CacheBehaviorTest(unittest.TestCase):
 
         def fake_fetch_contests():
             return [
-                {"id": 2065, "startTimeSeconds": 100},
-                {"id": 2066, "startTimeSeconds": 100},
+                {"id": 2065, "name": "Codeforces Round 1000 (Div. 1)", "startTimeSeconds": 100},
+                {"id": 2066, "name": "Codeforces Round 1000 (Div. 2)", "startTimeSeconds": 100},
             ]
 
         self.cf._fetch_contests_with_retry = fake_fetch_contests
@@ -475,8 +482,8 @@ class CacheBehaviorTest(unittest.TestCase):
         def fake_fetch_contests():
             called["value"] += 1
             return [
-                {"id": 2065, "startTimeSeconds": 300},
-                {"id": 2066, "startTimeSeconds": 300},
+                {"id": 2065, "name": "Codeforces Round 1001 (Div. 1)", "startTimeSeconds": 300},
+                {"id": 2066, "name": "Codeforces Round 1001 (Div. 2)", "startTimeSeconds": 300},
             ]
 
         self.cf._fetch_contests_with_retry = fake_fetch_contests
@@ -509,8 +516,8 @@ class CacheBehaviorTest(unittest.TestCase):
         def fake_fetch_contests():
             called["value"] += 1
             return [
-                {"id": 2065, "startTimeSeconds": 500},
-                {"id": 2066, "startTimeSeconds": 500},
+                {"id": 2065, "name": "Codeforces Round 1002 (Div. 1)", "startTimeSeconds": 500},
+                {"id": 2066, "name": "Codeforces Round 1002 (Div. 2)", "startTimeSeconds": 500},
             ]
 
         self.cf._fetch_contests_with_retry = fake_fetch_contests
@@ -536,6 +543,25 @@ class CacheBehaviorTest(unittest.TestCase):
         )
 
         self.assertEqual(warning_matches, [2064, 2066])
+
+    def test_cf_classify_contest_name_supports_all_filter_buckets(self) -> None:
+        """Verify contest-title heuristics cover every supported Codeforces filter bucket."""
+        cases = {
+            "Codeforces Round 1000 (Div. 1)": "div1",
+            "Codeforces Round 1000 (Div. 2)": "div2",
+            "Codeforces Round 1000 (Div. 1 + Div. 2)": "div1+2",
+            "Codeforces Round 1000 (Div. 3)": "div3",
+            "Codeforces Round 1000 (Div. 4)": "div4",
+            "Educational Codeforces Round 200 (Rated for Div. 2)": "div2",
+            "Hello 2024": "div1+2",
+            "Good Bye 2024": "div1+2",
+            "Goodbye 2024": "div1+2",
+            "Kotlin Heroes 11": "others",
+        }
+
+        for contest_name, expected_type in cases.items():
+            with self.subTest(contest_name=contest_name):
+                self.assertEqual(self.cf._classify_contest_name(contest_name), expected_type)
 
 
 class InputValidationTest(unittest.TestCase):
@@ -655,6 +681,27 @@ class InputValidationTest(unittest.TestCase):
 
         self.assertEqual(args.contest, ["abc403", "abc404"])
 
+    def test_parse_args_accepts_multiple_cf_type_filters(self) -> None:
+        """Verify argparse keeps the repeated --only values in their original order."""
+        args = parse_args(["--oj", "cf", "-c", "2065", "-g", "example", "--only", "div1", "div2"])
+
+        self.assertEqual(args.only, ["div1", "div2"])
+
+    def test_normalize_selected_contest_types_expands_and_validates_values(self) -> None:
+        """Verify contest-type normalization applies the shared CLI and web rules."""
+        self.assertEqual(normalize_selected_contest_types("cf", None), list(CF_CONTEST_TYPES))
+        self.assertEqual(
+            normalize_selected_contest_types("cf", ["DIV1", "div2", "div1"]),
+            ["div1", "div2"],
+        )
+        self.assertEqual(normalize_selected_contest_types("cf", ["all"]), list(CF_CONTEST_TYPES))
+        self.assertIsNone(normalize_selected_contest_types("atcoder", ["all"]))
+
+        with self.assertRaises(TrackerError):
+            normalize_selected_contest_types("cf", ["edu"])
+        with self.assertRaises(TrackerError):
+            normalize_selected_contest_types("atcoder", ["div1"])
+
 
 class CliOutputColorTest(unittest.TestCase):
     """Verify colored CLI output and multi-contest orchestration behavior."""
@@ -669,11 +716,12 @@ class CliOutputColorTest(unittest.TestCase):
             CheckEvent(kind="contest_hit", message="bob done abc404"),
         ]
 
-        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, contest_types=None, reporter=None):
             self.assertEqual(oj, "atcoder")
             self.assertEqual(group, "example")
             self.assertEqual(contest_tokens, ["abc402", "abc403-abc404"])
             self.assertFalse(refresh_cache)
+            self.assertIsNone(contest_types)
             for event in fake_events:
                 reporter(event)
             return None
@@ -700,11 +748,12 @@ class CliOutputColorTest(unittest.TestCase):
             CheckEvent(kind="contest_miss", message="no users have done 2066"),
         ]
 
-        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, contest_types=None, reporter=None):
             self.assertEqual(oj, "cf")
             self.assertEqual(group, "example")
             self.assertEqual(contest_tokens, ["2065-2066"])
             self.assertFalse(refresh_cache)
+            self.assertEqual(contest_types, list(CF_CONTEST_TYPES))
             for event in fake_events:
                 reporter(event)
             return None
@@ -731,11 +780,12 @@ class CliOutputColorTest(unittest.TestCase):
             ),
         ]
 
-        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, contest_types=None, reporter=None):
             self.assertEqual(oj, "cf")
             self.assertEqual(group, "example")
             self.assertEqual(contest_tokens, ["2065"])
             self.assertFalse(refresh_cache)
+            self.assertEqual(contest_types, list(CF_CONTEST_TYPES))
             for event in fake_events:
                 reporter(event)
             return None
@@ -764,11 +814,12 @@ class CliOutputColorTest(unittest.TestCase):
             ),
         ]
 
-        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, contest_types=None, reporter=None):
             self.assertEqual(oj, "cf")
             self.assertEqual(group, "example")
             self.assertEqual(contest_tokens, ["2065"])
             self.assertFalse(refresh_cache)
+            self.assertEqual(contest_types, list(CF_CONTEST_TYPES))
             for event in fake_events:
                 reporter(event)
             return None
@@ -795,11 +846,12 @@ class CliOutputColorTest(unittest.TestCase):
             ),
         ]
 
-        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, contest_types=None, reporter=None):
             self.assertEqual(oj, "cf")
             self.assertEqual(group, "example")
             self.assertEqual(contest_tokens, ["2065"])
             self.assertFalse(refresh_cache)
+            self.assertEqual(contest_types, list(CF_CONTEST_TYPES))
             for event in fake_events:
                 reporter(event)
             return None
@@ -827,12 +879,13 @@ class CliOutputColorTest(unittest.TestCase):
         with self.assertRaises(TrackerError):
             run_check_payload = {}
 
-            def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+            def fake_run_check(oj, group, contest_tokens, refresh_cache, *, contest_types=None, reporter=None):
                 del group
                 del refresh_cache
                 del reporter
                 run_check_payload["oj"] = oj
                 run_check_payload["contest_tokens"] = contest_tokens
+                run_check_payload["contest_types"] = contest_types
                 raise TrackerError("for --oj cf, --contest must be a pure numeric contestId")
 
             with patch("src.cli.run_check", side_effect=fake_run_check):
@@ -840,6 +893,64 @@ class CliOutputColorTest(unittest.TestCase):
 
         self.assertEqual(run_check_payload["oj"], "cf")
         self.assertEqual(run_check_payload["contest_tokens"], ["2065", "abc403-abc405"])
+        self.assertEqual(run_check_payload["contest_types"], list(CF_CONTEST_TYPES))
+
+    def test_run_passes_selected_cf_type_filters_to_shared_check_service(self) -> None:
+        """Verify --only forwards the normalized Codeforces filter list into run_check."""
+        captured: dict[str, object] = {}
+
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, contest_types=None, reporter=None):
+            del reporter
+            captured["oj"] = oj
+            captured["group"] = group
+            captured["contest_tokens"] = contest_tokens
+            captured["refresh_cache"] = refresh_cache
+            captured["contest_types"] = contest_types
+            return None
+
+        with patch("src.cli.run_check", side_effect=fake_run_check):
+            exit_code = run(
+                ["--oj", "cf", "-c", "2065", "-g", "example", "--only", "div1", "div2", "div1"]
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(captured["oj"], "cf")
+        self.assertEqual(captured["group"], "example")
+        self.assertEqual(captured["contest_tokens"], ["2065"])
+        self.assertFalse(captured["refresh_cache"])
+        self.assertEqual(captured["contest_types"], ["div1", "div2"])
+
+    def test_run_colors_skipped_contest_in_yellow(self) -> None:
+        """Verify skipped contest events use the warning color in CLI output."""
+        fake_events = [
+            CheckEvent(
+                kind="contest_skipped",
+                message="skip 2065: contest type div1 is not in selected types div2",
+            ),
+        ]
+
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, contest_types=None, reporter=None):
+            self.assertEqual(oj, "cf")
+            self.assertEqual(group, "example")
+            self.assertEqual(contest_tokens, ["2065"])
+            self.assertFalse(refresh_cache)
+            self.assertEqual(contest_types, ["div2"])
+            for event in fake_events:
+                reporter(event)
+            return None
+
+        stdout = io.StringIO()
+        with (
+            patch("src.cli.run_check", side_effect=fake_run_check),
+            redirect_stdout(stdout),
+        ):
+            exit_code = run(["--oj", "cf", "-c", "2065", "-g", "example", "--only", "div2"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            stdout.getvalue().splitlines(),
+            [f"{ANSI_YELLOW}skip 2065: contest type div1 is not in selected types div2{ANSI_RESET}"],
+        )
 
     def test_main_colors_tracker_error_in_red_stderr(self) -> None:
         """Verify CLI domain errors are rendered to stderr using the error color."""

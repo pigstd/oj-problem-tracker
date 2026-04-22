@@ -45,6 +45,7 @@
 - `OJ`
 - `Group`
 - `Contest Token`
+- `Contest Type`（仅 Codeforces）
 - `Force refresh cache`
 - `Start Check`
 
@@ -63,6 +64,32 @@
 - 使用紧凑的多行文本框
 - 通过空白字符切分多个 token
 - token 规则与 CLI 完全一致
+
+### Contest Type
+
+只在 `cf` 被选中时显示。
+
+当前设计：
+
+- 以一组多选框展示支持的比赛类型
+- 默认全部选中
+- 提供 `Select all` 和 `Clear all`
+- 若当前一个都不选，前端会阻止提交
+
+当前支持的选项：
+
+- `Div. 1`
+- `Div. 2`
+- `Div. 1 + 2`
+- `Div. 3`
+- `Div. 4`
+- `Others`
+
+语义规则：
+
+- 这是“目标比赛过滤”而不是 warning 过滤
+- 如果某个目标 contest 因类型不在选中集合而被跳过，它仍然会出现在结果里
+- `Educational Codeforces Round` 在后端归类为 `Div. 2`
 
 ### 错误提示
 
@@ -135,8 +162,10 @@
 - 按展开后的 contest 顺序展示
 - 每个展开后的 contest 都单独显示
 - 命中和未命中都要显示
+- 被过滤掉的 contest 也要显示，但状态为 `Skipped`
 - 命中时展示命中的用户列表
 - 未命中时展示 `no users have done <contest_id>`
+- `Skipped` 卡片展示识别到的比赛类型和跳过原因
 - 若存在 warning，则在对应 contest 卡片里额外展示 `Possible same-round matches`
 - warning 会列出用户以及触发 warning 的同场 sibling contest ID
 
@@ -158,11 +187,13 @@
 用户点击 `Start Check` 后：
 
 1. 读取当前 `OJ`、`Group`、`Contest Token`、`refresh_cache`
-2. 调用 `POST /api/check`
-3. 若成功，拿到 `run_id`
-4. 轮询 `GET /api/runs/{id}`
-5. 用返回的 `events` 更新 `Log`
-6. 用返回的 `contest_summaries` 更新 `Result`
+2. 若当前是 `cf`，额外读取 `Contest Type`
+3. 若当前是 `cf` 且一个类型都没选，则阻止提交
+4. 调用 `POST /api/check`
+5. 若成功，拿到 `run_id`
+6. 轮询 `GET /api/runs/{id}`
+7. 用返回的 `events` 更新 `Log`
+8. 用返回的 `contest_summaries` 更新 `Result`
 
 ### 并发运行限制
 
@@ -183,6 +214,7 @@
   - 返回指定 group 的完整用户列表
 - `POST /api/check`
   - 发起一次检查任务
+  - 请求体中的 `contest_types` 只对 `cf` 生效；省略时等价于全部类型
 - `GET /api/runs/{id}`
   - 返回运行状态、最近事件、contest 精确结果和 warning 结果
 
@@ -204,3 +236,4 @@
 - 不把 group 详情直接嵌入主页面，仍然优先使用弹窗
 - `Result` 仍然保持 contest 级展示，而不是回到用户级缓存状态展示
 - Codeforces warning 继续作为附加信息展示，而不是替代精确命中结果
+- Codeforces 比赛类型筛选继续放在 `Input` 面板中，不单独拆成第四栏

@@ -5,6 +5,7 @@ import sys
 
 from src.core.checks import CheckEvent, run_check
 from src.core.errors import TrackerError
+from src.oj.cf import normalize_selected_contest_types
 from src.oj.registry import available_oj_names
 from src.output import ANSI_GREEN, ANSI_RED, ANSI_RESET, ANSI_YELLOW, print_colored
 
@@ -38,6 +39,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Force refresh cache, ignoring update interval.",
     )
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        help="CF contest types to check: all, div1, div2, div1+2, div3, div4, others",
+    )
     return parser.parse_args(argv)
 
 
@@ -47,6 +53,7 @@ _EVENT_COLORS = {
     "updating_cache": ANSI_YELLOW,
     "updating_contest_catalog": ANSI_YELLOW,
     "contest_catalog_warning": ANSI_YELLOW,
+    "contest_skipped": ANSI_YELLOW,
     "contest_hit": ANSI_RED,
     "contest_miss": ANSI_GREEN,
     "contest_warning": ANSI_YELLOW,
@@ -62,11 +69,13 @@ def _print_cli_event(event: CheckEvent) -> None:
 def run(argv: list[str] | None = None) -> int:
     """Run the CLI workflow by refreshing caches once and checking each requested contest."""
     args = parse_args(argv)
+    contest_types = normalize_selected_contest_types(args.oj, args.only)
     run_check(
         args.oj,
         args.group,
         args.contest,
         args.refresh_cache,
+        contest_types=contest_types,
         reporter=_print_cli_event,
     )
     return 0
