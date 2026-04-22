@@ -342,6 +342,87 @@ class CacheBehaviorTest(unittest.TestCase):
             ],
         )
 
+    def test_cf_prepare_run_raises_when_catalog_refresh_fails_without_cache(self) -> None:
+        """Verify prepare_run fails closed when contest.list cannot be fetched and no cache exists."""
+        reported_statuses: list[tuple[str, str]] = []
+
+        def fake_fetch_contests():
+            raise TrackerError("contest.list unavailable")
+
+        self.cf._fetch_contests_with_retry = fake_fetch_contests
+
+        with self.assertRaises(TrackerError) as ctx:
+            self.cf.prepare_run(
+                refresh_cache=False,
+                status_callback=lambda kind, message: reported_statuses.append((kind, message)),
+            )
+
+        self.assertIn("no cached catalog is available", str(ctx.exception))
+        self.assertEqual(
+            reported_statuses,
+            [("updating_contest_catalog", "updating contest catalog for cf ...")],
+        )
+
+    def test_cf_prepare_run_uses_cached_catalog_when_refresh_fails(self) -> None:
+        """Verify prepare_run falls back to the cached catalog when refresh retries are exhausted."""
+        catalog_file = self.cf._get_contest_catalog_cache_file_path()
+        catalog_file.write_text(
+            json.dumps(
+                _contest_catalog_payload(
+                    _iso_utc_hours_ago(48),
+                    [
+                        {"id": 2065, "startTimeSeconds": 100},
+                        {"id": 2066, "startTimeSeconds": 100},
+                    ],
+                )
+            ),
+            encoding="utf-8",
+        )
+        reported_statuses: list[tuple[str, str]] = []
+
+        def fake_fetch_contests():
+            raise TrackerError("contest.list unavailable")
+
+        self.cf._fetch_contests_with_retry = fake_fetch_contests
+        self.cf.prepare_run(
+            refresh_cache=False,
+            status_callback=lambda kind, message: reported_statuses.append((kind, message)),
+        )
+
+        self.assertEqual(
+            self.cf.find_warning_matches([{"contestId": 2066}], 2065),
+            [2066],
+        )
+        self.assertEqual(reported_statuses[0], ("updating_contest_catalog", "updating contest catalog for cf ..."))
+        self.assertEqual(reported_statuses[1][0], "contest_catalog_warning")
+        self.assertIn("using cached catalog", reported_statuses[1][1])
+
+    def test_cf_prepare_run_continues_when_catalog_cache_write_fails(self) -> None:
+        """Verify prepare_run keeps the in-memory catalog when persisting it fails."""
+        reported_statuses: list[tuple[str, str]] = []
+
+        def fake_fetch_contests():
+            return [
+                {"id": 2065, "startTimeSeconds": 100},
+                {"id": 2066, "startTimeSeconds": 100},
+            ]
+
+        self.cf._fetch_contests_with_retry = fake_fetch_contests
+        self.cf._write_contest_catalog_cache = lambda cache_data: (_ for _ in ()).throw(OSError("disk full"))
+        self.cf.prepare_run(
+            refresh_cache=False,
+            status_callback=lambda kind, message: reported_statuses.append((kind, message)),
+        )
+
+        self.assertEqual(
+            self.cf.find_warning_matches([{"contestId": 2066}], 2065),
+            [2066],
+        )
+        self.assertFalse(self.cf._get_contest_catalog_cache_file_path().exists())
+        self.assertEqual(reported_statuses[0], ("updating_contest_catalog", "updating contest catalog for cf ..."))
+        self.assertEqual(reported_statuses[1][0], "contest_catalog_warning")
+        self.assertIn("continuing with in-memory catalog", reported_statuses[1][1])
+
     def test_cf_prepare_run_skips_catalog_refresh_within_interval(self) -> None:
         """Verify fresh contest catalog caches are reused without another API request."""
         catalog_file = self.cf._get_contest_catalog_cache_file_path()
@@ -703,6 +784,42 @@ class CliOutputColorTest(unittest.TestCase):
         self.assertEqual(
             stdout.getvalue().splitlines(),
             [f"{ANSI_YELLOW}updating contest catalog for cf ...{ANSI_RESET}"],
+        )
+
+    def test_run_colors_catalog_warning_in_yellow(self) -> None:
+        """Verify contest-catalog warnings use the yellow status color."""
+        fake_events = [
+            CheckEvent(
+                kind="contest_catalog_warning",
+                message="warning: failed to refresh contest catalog for cf, using cached catalog: boom",
+            ),
+        ]
+
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+            self.assertEqual(oj, "cf")
+            self.assertEqual(group, "example")
+            self.assertEqual(contest_tokens, ["2065"])
+            self.assertFalse(refresh_cache)
+            for event in fake_events:
+                reporter(event)
+            return None
+
+        stdout = io.StringIO()
+        with (
+            patch("src.cli.run_check", side_effect=fake_run_check),
+            redirect_stdout(stdout),
+        ):
+            exit_code = run(["--oj", "cf", "-c", "2065", "-g", "example"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            stdout.getvalue().splitlines(),
+            [
+                (
+                    f"{ANSI_YELLOW}warning: failed to refresh contest catalog for cf, "
+                    f"using cached catalog: boom{ANSI_RESET}"
+                )
+            ],
         )
 
     def test_run_rejects_non_numeric_cf_contest_in_multi_contest_input(self) -> None:

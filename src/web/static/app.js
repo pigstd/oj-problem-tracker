@@ -272,7 +272,7 @@ async function handleSubmit(event) {
   }
 
   setSubmitting(true);
-  setStatusPill("running", "Starting");
+  setStatusPill("running", "Running");
   renderEventFeed([]);
   renderContestResults([]);
 

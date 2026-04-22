@@ -22,7 +22,6 @@ class CheckEvent:
     contest_id: str | None = None
     index: int | None = None
     total: int | None = None
-    matched_users: list[str] | None = None
     warning_contests: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -196,7 +195,6 @@ def run_check(
                     kind="contest_miss",
                     message=f"no users have done {contest_label}",
                     contest_id=contest_label,
-                    matched_users=[],
                 )
             )
 

@@ -304,7 +304,8 @@ textarea {
 .log-feed li[data-kind="checking_user"],
 .log-feed li[data-kind="cache_hit"],
 .log-feed li[data-kind="updating_cache"],
-.log-feed li[data-kind="updating_contest_catalog"] {
+.log-feed li[data-kind="updating_contest_catalog"],
+.log-feed li[data-kind="contest_catalog_warning"] {
   border-left-color: var(--warning);
 }
 

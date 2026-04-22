@@ -182,6 +182,25 @@ class WebApiTest(unittest.TestCase):
         self.assertEqual(snapshot["events"][1]["kind"], "checking_user")
         self.assertEqual(snapshot["events"][2]["contest_id"], "abc403")
 
+    def test_check_endpoint_rejects_legacy_contest_field_payload(self) -> None:
+        """Verify the API only accepts the documented contest_tokens request field."""
+        payload = self._json_response_from_request(
+            self._post_request(
+                "/api/check",
+                {
+                    "oj": "atcoder",
+                    "group": "example",
+                    "contest": "abc403 abc404",
+                    "refresh_cache": False,
+                },
+            )
+        )
+
+        self.assertEqual(
+            payload["error"]["message"],
+            "invalid request payload: 'contest_tokens' must be a non-empty string list",
+        )
+
     def test_index_page_uses_three_panel_layout_and_group_modal(self) -> None:
         """Verify the HTML layout exposes Input, Log, Result, and the group modal."""
         html = self._text_response_from_request(self._get_request("/"))
@@ -207,7 +226,9 @@ class WebApiTest(unittest.TestCase):
         self.assertIn("slice(-3).reverse()", script)
         self.assertIn("contest_warning", styles)
         self.assertIn("updating_contest_catalog", styles)
+        self.assertIn("contest_catalog_warning", styles)
         self.assertIn("Possible same-round matches", script)
+        self.assertNotIn('"Starting"', script)
         self.assertNotIn("userResults", script)
 
     def _get_request(self, path: str) -> bytes:

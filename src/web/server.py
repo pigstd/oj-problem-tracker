@@ -74,9 +74,6 @@ def _normalize_check_request(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(group, str) or not group.strip():
         raise TrackerError("invalid request payload: 'group' must be a non-empty string")
 
-    if contest_tokens is None and isinstance(payload.get("contest"), str):
-        contest_tokens = payload["contest"].split()
-
     if not isinstance(contest_tokens, list) or not contest_tokens:
         raise TrackerError("invalid request payload: 'contest_tokens' must be a non-empty string list")
     if not all(isinstance(token, str) and token.strip() for token in contest_tokens):

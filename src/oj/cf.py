@@ -237,10 +237,17 @@ class CodeforcesAdapter(OJAdapter):
 
         try:
             contests = self._fetch_contests_with_retry()
-        except TrackerError:
+        except TrackerError as exc:
             if existing_cache is not None:
+                if status_callback is not None:
+                    status_callback(
+                        "contest_catalog_warning",
+                        f"warning: failed to refresh contest catalog for cf, using cached catalog: {exc}",
+                    )
                 return self._contest_start_times_from_cache(existing_cache)
-            return {}
+            raise TrackerError(
+                f"failed to load contest catalog for cf and no cached catalog is available: {exc}"
+            ) from exc
 
         contest_cache = {
             "version": CONTEST_CATALOG_CACHE_VERSION,
@@ -254,8 +261,21 @@ class CodeforcesAdapter(OJAdapter):
                 for contest in contests
             ],
         }
-        self._write_contest_catalog_cache(contest_cache)
-        return self._contest_start_times_from_cache(contest_cache)
+        contest_start_times = self._contest_start_times_from_cache(contest_cache)
+
+        try:
+            self._write_contest_catalog_cache(contest_cache)
+        except OSError as exc:
+            if status_callback is not None:
+                status_callback(
+                    "contest_catalog_warning",
+                    (
+                        "warning: failed to persist contest catalog for cf, "
+                        f"continuing with in-memory catalog: {exc}"
+                    ),
+                )
+
+        return contest_start_times
 
     def _get_contest_catalog_cache_file_path(self) -> Path:
         """Return the shared contest catalog cache path for Codeforces."""
