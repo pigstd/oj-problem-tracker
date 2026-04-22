@@ -9,7 +9,8 @@
 1. 从 `usergroup/<group>.json` 读取所选 OJ 的用户列表。
 2. 解析并展开 `--contest` 里的查询 token。
 3. 为每个用户更新一次本地缓存。
-4. 仅基于缓存判断哪些用户做过展开后的目标比赛。
+4. 按展开后的目标比赛做精确命中检查。
+5. 对支持的 OJ 追加 warning 级别的补充判定。
 
 ## Contest Token 工作流
 
@@ -55,8 +56,15 @@ python3 oj-problem-tracker.py --oj cf -c 2065 2067-2069 -g example
 
 - 对命中的用户输出 `<user_id> done <contest_id>`
 - 若某个比赛无人命中，输出 `no users have done <contest_id>`
+- 对支持 warning 判定的 OJ，可额外输出 warning 结果
 
 这意味着单点查询、多比赛查询、区间查询本质上共享同一套缓存检查逻辑。
+
+当前只有 Codeforces 会追加 warning 判定：
+
+- 先按 `contestId` 做精确匹配
+- 若目标比赛没有被某个用户精确命中，则再检查相邻比赛是否属于同一开赛场次
+- 若相邻同场比赛被做过，则输出 warning，但不把它当作正常命中
 
 ## 模块职责
 
@@ -84,6 +92,8 @@ python3 oj-problem-tracker.py --oj cf -c 2065 2067-2069 -g example
 
 - `src/oj/cf.py`
   - Codeforces token 规则、抓取规则、命中规则
+  - Codeforces 比赛目录缓存
+  - Codeforces 同场 warning 判定
 
 - `src/oj/registry.py`
   - `oj` 名称到 adapter 的映射

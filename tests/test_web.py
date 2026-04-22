@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from src.core.checks import CheckEvent, CheckRunResult, ContestCheckSummary
+from src.core.checks import CheckEvent, CheckRunResult, ContestCheckSummary, ContestWarningSummary
 from src.web.server import RunManager, TrackerRequestHandler
 
 
@@ -66,6 +66,12 @@ class WebApiTest(unittest.TestCase):
         def fake_check_runner(oj, group, contest_tokens, refresh_cache, *, reporter=None):
             reporter(
                 CheckEvent(
+                    kind="updating_contest_catalog",
+                    message="updating contest catalog for cf ...",
+                )
+            )
+            reporter(
+                CheckEvent(
                     kind="checking_user",
                     message="checking user alice ...",
                     user_id="alice",
@@ -81,6 +87,15 @@ class WebApiTest(unittest.TestCase):
                     contest_id="abc403",
                 )
             )
+            reporter(
+                CheckEvent(
+                    kind="contest_warning",
+                    message="warning: alice may have done abc403 via same-round contest abc404",
+                    user_id="alice",
+                    contest_id="abc403",
+                    warning_contests=["abc404"],
+                )
+            )
             return CheckRunResult(
                 oj=oj,
                 group=group,
@@ -89,7 +104,16 @@ class WebApiTest(unittest.TestCase):
                 expanded_contests=["abc403"],
                 users=["alice"],
                 contest_summaries=[
-                    ContestCheckSummary(contest_id="abc403", matched_users=["alice"])
+                    ContestCheckSummary(
+                        contest_id="abc403",
+                        matched_users=["alice"],
+                        warnings=[
+                            ContestWarningSummary(
+                                user_id="alice",
+                                warning_contests=["abc404"],
+                            )
+                        ],
+                    )
                 ],
                 events=[],
             )
@@ -150,8 +174,13 @@ class WebApiTest(unittest.TestCase):
         self.assertIsNotNone(snapshot)
         self.assertEqual(snapshot["status"], "completed")
         self.assertEqual(snapshot["result"]["contest_summaries"][0]["matched_users"], ["alice"])
-        self.assertEqual(snapshot["events"][0]["kind"], "checking_user")
-        self.assertEqual(snapshot["events"][1]["contest_id"], "abc403")
+        self.assertEqual(
+            snapshot["result"]["contest_summaries"][0]["warnings"][0]["warning_contests"],
+            ["abc404"],
+        )
+        self.assertEqual(snapshot["events"][0]["kind"], "updating_contest_catalog")
+        self.assertEqual(snapshot["events"][1]["kind"], "checking_user")
+        self.assertEqual(snapshot["events"][2]["contest_id"], "abc403")
 
     def test_index_page_uses_three_panel_layout_and_group_modal(self) -> None:
         """Verify the HTML layout exposes Input, Log, Result, and the group modal."""
@@ -176,6 +205,9 @@ class WebApiTest(unittest.TestCase):
         self.assertIn(".result-list {", styles)
         self.assertIn("overflow-y: auto;", styles)
         self.assertIn("slice(-3).reverse()", script)
+        self.assertIn("contest_warning", styles)
+        self.assertIn("updating_contest_catalog", styles)
+        self.assertIn("Possible same-round matches", script)
         self.assertNotIn("userResults", script)
 
     def _get_request(self, path: str) -> bytes:

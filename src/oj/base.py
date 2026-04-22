@@ -2,16 +2,27 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import Any, Callable, TypeAlias
 
 
 ContestKey: TypeAlias = str | int
+StatusReporter: TypeAlias = Callable[[str, str], None]
 
 
 class OJAdapter(ABC):
     """Base interface for each OJ adapter."""
 
     name: str
+
+    def prepare_run(
+        self,
+        refresh_cache: bool,
+        *,
+        status_callback: StatusReporter | None = None,
+    ) -> None:
+        """Prepare adapter-level state once before a check run starts."""
+        del refresh_cache
+        del status_callback
 
     @abstractmethod
     def validate_contest(self, contest: str) -> ContestKey:
@@ -37,3 +48,9 @@ class OJAdapter(ABC):
     @abstractmethod
     def submission_matches_contest(self, submission: Any, contest: ContestKey) -> bool:
         """Check whether a submission belongs to target contest."""
+
+    def find_warning_matches(self, submissions: list[Any], contest: ContestKey) -> list[ContestKey]:
+        """Return alternative contest IDs that should produce warning-only matches."""
+        del submissions
+        del contest
+        return []

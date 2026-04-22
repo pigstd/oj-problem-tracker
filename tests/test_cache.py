@@ -15,6 +15,7 @@ from src.core.groups import load_group_users
 from src.core import tracker as tracker_service
 from src.core.errors import TrackerError
 from src.oj.atcoder import AtCoderAdapter
+from src.oj import cf as cf_module
 from src.oj.cf import CodeforcesAdapter
 
 
@@ -42,6 +43,16 @@ def _cache_payload(
     if oj == "atcoder":
         payload["next_from_second"] = 0 if next_from_second is None else next_from_second
     return payload
+
+
+def _contest_catalog_payload(last_updated_at: str, contests: list[dict]) -> dict:
+    """Build a Codeforces contest catalog cache payload for tests."""
+    return {
+        "version": cf_module.CONTEST_CATALOG_CACHE_VERSION,
+        "oj": "cf",
+        "last_updated_at": last_updated_at,
+        "contests": contests,
+    }
 
 
 class CacheBehaviorTest(unittest.TestCase):
@@ -285,6 +296,166 @@ class CacheBehaviorTest(unittest.TestCase):
         self.assertEqual(called["value"], 1)
         self.assertEqual([s["id"] for s in cache["submissions"]], [99])
 
+    def test_cf_prepare_run_creates_contest_catalog_cache_for_new_catalog(self) -> None:
+        """Verify prepare_run creates the shared contest catalog cache when missing."""
+        calls = {"value": 0}
+
+        def fake_fetch_contests():
+            calls["value"] += 1
+            return [
+                {"id": 2065, "startTimeSeconds": 100},
+                {"id": 2066, "startTimeSeconds": 100},
+            ]
+
+        self.cf._fetch_contests_with_retry = fake_fetch_contests
+        self.cf.prepare_run(refresh_cache=False)
+
+        self.assertEqual(calls["value"], 1)
+        self.assertEqual(
+            self.cf.find_warning_matches([{"contestId": 2066}], 2065),
+            [2066],
+        )
+        self.assertTrue(self.cf._get_contest_catalog_cache_file_path().exists())
+
+    def test_cf_prepare_run_emits_status_before_refreshing_contest_catalog(self) -> None:
+        """Verify prepare_run reports contest-catalog refresh before fetching contest.list."""
+        call_order: list[tuple[str, str]] = []
+
+        def fake_fetch_contests():
+            call_order.append(("fetch", "contest.list"))
+            return [
+                {"id": 2065, "startTimeSeconds": 100},
+                {"id": 2066, "startTimeSeconds": 100},
+            ]
+
+        self.cf._fetch_contests_with_retry = fake_fetch_contests
+        self.cf.prepare_run(
+            refresh_cache=False,
+            status_callback=lambda kind, message: call_order.append((kind, message)),
+        )
+
+        self.assertEqual(
+            call_order,
+            [
+                ("updating_contest_catalog", "updating contest catalog for cf ..."),
+                ("fetch", "contest.list"),
+            ],
+        )
+
+    def test_cf_prepare_run_skips_catalog_refresh_within_interval(self) -> None:
+        """Verify fresh contest catalog caches are reused without another API request."""
+        catalog_file = self.cf._get_contest_catalog_cache_file_path()
+        catalog_file.write_text(
+            json.dumps(
+                _contest_catalog_payload(
+                    _iso_utc_hours_ago(1),
+                    [
+                        {"id": 2065, "startTimeSeconds": 100},
+                        {"id": 2066, "startTimeSeconds": 100},
+                    ],
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        called = {"value": False}
+
+        def fake_fetch_contests():
+            called["value"] = True
+            return []
+
+        self.cf._fetch_contests_with_retry = fake_fetch_contests
+        self.cf.prepare_run(refresh_cache=False)
+
+        self.assertFalse(called["value"])
+        self.assertEqual(
+            self.cf.find_warning_matches([{"contestId": 2066}], 2065),
+            [2066],
+        )
+
+    def test_cf_prepare_run_refreshes_stale_catalog_cache(self) -> None:
+        """Verify stale contest catalog caches are replaced by freshly fetched contest data."""
+        catalog_file = self.cf._get_contest_catalog_cache_file_path()
+        catalog_file.write_text(
+            json.dumps(
+                _contest_catalog_payload(
+                    _iso_utc_hours_ago(48),
+                    [
+                        {"id": 2065, "startTimeSeconds": 100},
+                        {"id": 2066, "startTimeSeconds": 200},
+                    ],
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        called = {"value": 0}
+
+        def fake_fetch_contests():
+            called["value"] += 1
+            return [
+                {"id": 2065, "startTimeSeconds": 300},
+                {"id": 2066, "startTimeSeconds": 300},
+            ]
+
+        self.cf._fetch_contests_with_retry = fake_fetch_contests
+        self.cf.prepare_run(refresh_cache=False)
+
+        self.assertEqual(called["value"], 1)
+        self.assertEqual(
+            self.cf.find_warning_matches([{"contestId": 2066}], 2065),
+            [2066],
+        )
+
+    def test_cf_prepare_run_force_refreshes_catalog_cache(self) -> None:
+        """Verify refresh mode forces a contest catalog refetch even when the cache is fresh."""
+        catalog_file = self.cf._get_contest_catalog_cache_file_path()
+        catalog_file.write_text(
+            json.dumps(
+                _contest_catalog_payload(
+                    _iso_utc_hours_ago(1),
+                    [
+                        {"id": 2065, "startTimeSeconds": 100},
+                        {"id": 2066, "startTimeSeconds": 100},
+                    ],
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        called = {"value": 0}
+
+        def fake_fetch_contests():
+            called["value"] += 1
+            return [
+                {"id": 2065, "startTimeSeconds": 500},
+                {"id": 2066, "startTimeSeconds": 500},
+            ]
+
+        self.cf._fetch_contests_with_retry = fake_fetch_contests
+        self.cf.prepare_run(refresh_cache=True)
+
+        self.assertEqual(called["value"], 1)
+        self.assertEqual(
+            self.cf.find_warning_matches([{"contestId": 2066}], 2065),
+            [2066],
+        )
+
+    def test_cf_find_warning_matches_checks_both_adjacent_contests(self) -> None:
+        """Verify warning matching inspects both adjacent contests when start times match."""
+        self.cf._contest_start_times = {
+            2064: 100,
+            2065: 100,
+            2066: 100,
+        }
+
+        warning_matches = self.cf.find_warning_matches(
+            [{"contestId": 2064}, {"contestId": 2066}],
+            2065,
+        )
+
+        self.assertEqual(warning_matches, [2064, 2066])
+
 
 class InputValidationTest(unittest.TestCase):
     """Verify CLI-facing validation and contest matching helpers."""
@@ -468,6 +639,71 @@ class CliOutputColorTest(unittest.TestCase):
         lines = stdout.getvalue().splitlines()
         self.assertEqual(lines[-2], f"{ANSI_GREEN}no users have done 2065{ANSI_RESET}")
         self.assertEqual(lines[-1], f"{ANSI_GREEN}no users have done 2066{ANSI_RESET}")
+
+    def test_run_colors_warning_result_in_yellow(self) -> None:
+        """Verify warning events use the warning color in CLI output."""
+        fake_events = [
+            CheckEvent(kind="contest_miss", message="no users have done 2065"),
+            CheckEvent(
+                kind="contest_warning",
+                message="warning: tourist may have done 2065 via same-round contest 2066",
+            ),
+        ]
+
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+            self.assertEqual(oj, "cf")
+            self.assertEqual(group, "example")
+            self.assertEqual(contest_tokens, ["2065"])
+            self.assertFalse(refresh_cache)
+            for event in fake_events:
+                reporter(event)
+            return None
+
+        stdout = io.StringIO()
+        with (
+            patch("src.cli.run_check", side_effect=fake_run_check),
+            redirect_stdout(stdout),
+        ):
+            exit_code = run(["--oj", "cf", "-c", "2065", "-g", "example"])
+
+        self.assertEqual(exit_code, 0)
+        lines = stdout.getvalue().splitlines()
+        self.assertEqual(lines[0], f"{ANSI_GREEN}no users have done 2065{ANSI_RESET}")
+        self.assertEqual(
+            lines[1],
+            f"{ANSI_YELLOW}warning: tourist may have done 2065 via same-round contest 2066{ANSI_RESET}",
+        )
+
+    def test_run_colors_catalog_update_in_yellow(self) -> None:
+        """Verify contest-catalog refresh events use the yellow status color."""
+        fake_events = [
+            CheckEvent(
+                kind="updating_contest_catalog",
+                message="updating contest catalog for cf ...",
+            ),
+        ]
+
+        def fake_run_check(oj, group, contest_tokens, refresh_cache, *, reporter=None):
+            self.assertEqual(oj, "cf")
+            self.assertEqual(group, "example")
+            self.assertEqual(contest_tokens, ["2065"])
+            self.assertFalse(refresh_cache)
+            for event in fake_events:
+                reporter(event)
+            return None
+
+        stdout = io.StringIO()
+        with (
+            patch("src.cli.run_check", side_effect=fake_run_check),
+            redirect_stdout(stdout),
+        ):
+            exit_code = run(["--oj", "cf", "-c", "2065", "-g", "example"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            stdout.getvalue().splitlines(),
+            [f"{ANSI_YELLOW}updating contest catalog for cf ...{ANSI_RESET}"],
+        )
 
     def test_run_rejects_non_numeric_cf_contest_in_multi_contest_input(self) -> None:
         """Verify Codeforces contest input rejects any non-numeric token or range."""

@@ -130,6 +130,7 @@ function renderContestResults(contestSummaries) {
   elements.contestResults.innerHTML = contestSummaries
     .map((summary) => {
       const hasMatches = summary.matched_users.length > 0;
+      const warnings = summary.warnings ?? [];
       const badgeClass = hasMatches ? "hit" : "miss";
       const badgeLabel = hasMatches ? `${summary.matched_users.length} hit` : "No hits";
       const detailMarkup = hasMatches
@@ -137,6 +138,25 @@ function renderContestResults(contestSummaries) {
             .map((user) => `<span class="user-chip">${escapeHtml(user)}</span>`)
             .join("")}</div>`
         : `<p>${escapeHtml(`no users have done ${summary.contest_id}`)}</p>`;
+      const warningMarkup = warnings.length
+        ? `
+          <section class="warning-section">
+            <p class="warning-heading">Possible same-round matches</p>
+            <div class="warning-list">
+              ${warnings
+                .map(
+                  (warning) => `
+                    <article class="warning-item">
+                      <strong>${escapeHtml(warning.user_id)}</strong>
+                      <p>via ${escapeHtml(warning.warning_contests.join(", "))}</p>
+                    </article>
+                  `
+                )
+                .join("")}
+            </div>
+          </section>
+        `
+        : "";
 
       return `
         <article class="result-card">
@@ -145,6 +165,7 @@ function renderContestResults(contestSummaries) {
             <span class="badge ${badgeClass}">${escapeHtml(badgeLabel)}</span>
           </header>
           ${detailMarkup}
+          ${warningMarkup}
         </article>
       `;
     })

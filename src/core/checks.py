@@ -23,6 +23,7 @@ class CheckEvent:
     index: int | None = None
     total: int | None = None
     matched_users: list[str] | None = None
+    warning_contests: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable event payload without unused fields."""
@@ -31,15 +32,32 @@ class CheckEvent:
 
 
 @dataclass(slots=True)
+class ContestWarningSummary:
+    """Describe one warning-only same-round match for a contest result."""
+
+    user_id: str
+    warning_contests: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable warning summary."""
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class ContestCheckSummary:
     """Summarize which users matched one expanded contest."""
 
     contest_id: str
     matched_users: list[str]
+    warnings: list[ContestWarningSummary]
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable contest summary."""
-        return asdict(self)
+        return {
+            "contest_id": self.contest_id,
+            "matched_users": list(self.matched_users),
+            "warnings": [warning.to_dict() for warning in self.warnings],
+        }
 
 
 @dataclass(slots=True)
@@ -89,8 +107,6 @@ def run_check(
     adapter = get_adapter(oj)
     target_contests = _expand_target_contests(contest_tokens, adapter)
     users = load_group_users(group, oj)
-    cache.ensure_cache_dir_exists(adapter.name)
-
     events: list[CheckEvent] = []
     contest_summaries: list[ContestCheckSummary] = []
     user_caches: dict[str, dict[str, Any]] = {}
@@ -101,6 +117,13 @@ def run_check(
         events.append(event)
         if reporter is not None:
             reporter(event)
+
+    def on_prepare_status(kind: str, message: str) -> None:
+        """Translate adapter-level preparation status callbacks into structured events."""
+        emit(CheckEvent(kind=kind, message=message))
+
+    cache.ensure_cache_dir_exists(adapter.name)
+    adapter.prepare_run(refresh_cache, status_callback=on_prepare_status)
 
     for index, user_id in enumerate(users, start=1):
         emit(
@@ -137,9 +160,11 @@ def run_check(
     for target_contest in target_contests:
         contest_label = str(target_contest)
         matched_users: list[str] = []
+        warning_summaries: list[ContestWarningSummary] = []
 
         for user_id in users:
-            if tracker.cache_has_done_contest(adapter, user_caches[user_id]["submissions"], target_contest):
+            submissions = user_caches[user_id]["submissions"]
+            if tracker.cache_has_done_contest(adapter, submissions, target_contest):
                 matched_users.append(user_id)
                 emit(
                     CheckEvent(
@@ -149,6 +174,21 @@ def run_check(
                         contest_id=contest_label,
                     )
                 )
+                continue
+
+            warning_contests = [
+                str(contest)
+                for contest in adapter.find_warning_matches(submissions, target_contest)
+            ]
+            if not warning_contests:
+                continue
+
+            warning_summaries.append(
+                ContestWarningSummary(
+                    user_id=user_id,
+                    warning_contests=warning_contests,
+                )
+            )
 
         if not matched_users:
             emit(
@@ -160,8 +200,28 @@ def run_check(
                 )
             )
 
+        for warning_summary in warning_summaries:
+            warning_label = ", ".join(warning_summary.warning_contests)
+            contest_noun = "contest" if len(warning_summary.warning_contests) == 1 else "contests"
+            emit(
+                CheckEvent(
+                    kind="contest_warning",
+                    message=(
+                        f"warning: {warning_summary.user_id} may have done {contest_label} "
+                        f"via same-round {contest_noun} {warning_label}"
+                    ),
+                    user_id=warning_summary.user_id,
+                    contest_id=contest_label,
+                    warning_contests=list(warning_summary.warning_contests),
+                )
+            )
+
         contest_summaries.append(
-            ContestCheckSummary(contest_id=contest_label, matched_users=matched_users)
+            ContestCheckSummary(
+                contest_id=contest_label,
+                matched_users=matched_users,
+                warnings=warning_summaries,
+            )
         )
 
     return CheckRunResult(

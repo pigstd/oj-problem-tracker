@@ -108,6 +108,7 @@
 - 只保留最近 3 条事件
 - 最新事件显示在最上方
 - 头部只保留一个简洁状态 badge
+- warning 事件和普通事件一起进入最近 3 条裁剪
 
 当前状态值：
 
@@ -136,6 +137,8 @@
 - 命中和未命中都要显示
 - 命中时展示命中的用户列表
 - 未命中时展示 `no users have done <contest_id>`
+- 若存在 warning，则在对应 contest 卡片里额外展示 `Possible same-round matches`
+- warning 会列出用户以及触发 warning 的同场 sibling contest ID
 
 `Result` 是主界面里唯一允许内部滚动的模块。若 contest 太多，由 `Result` 自己滚动，而不是整个页面滚动。
 
@@ -181,7 +184,7 @@
 - `POST /api/check`
   - 发起一次检查任务
 - `GET /api/runs/{id}`
-  - 返回运行状态、最近事件和 contest 结果
+  - 返回运行状态、最近事件、contest 精确结果和 warning 结果
 
 ## 当前实现约束
 
@@ -200,3 +203,4 @@
 - 不把 `Log` 改回完整长列表
 - 不把 group 详情直接嵌入主页面，仍然优先使用弹窗
 - `Result` 仍然保持 contest 级展示，而不是回到用户级缓存状态展示
+- Codeforces warning 继续作为附加信息展示，而不是替代精确命中结果

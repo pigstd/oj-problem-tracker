@@ -45,8 +45,10 @@ _EVENT_COLORS = {
     "checking_user": ANSI_YELLOW,
     "cache_hit": ANSI_YELLOW,
     "updating_cache": ANSI_YELLOW,
+    "updating_contest_catalog": ANSI_YELLOW,
     "contest_hit": ANSI_RED,
     "contest_miss": ANSI_GREEN,
+    "contest_warning": ANSI_YELLOW,
 }
 
 
