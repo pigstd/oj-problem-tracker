@@ -18,6 +18,8 @@
 ### 顶部标题行
 
 - 页面顶部只保留一个标题：`OJ Problem Tracker`
+- 标题后附带一个 GitHub 图标链接，跳到 repo：`https://github.com/pigstd/oj-problem-tracker`
+- 不直接在标题区展示完整 repo URL
 - 不保留 hero、大段说明文案、统计卡片或其它摘要模块
 
 ### 主内容区
