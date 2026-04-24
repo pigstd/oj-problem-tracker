@@ -5,6 +5,7 @@ const state = {
   currentRunId: null,
   pollTimer: null,
   isSubmitting: false,
+  isContestTypeExpanded: false,
   groups: [],
   selectedGroupName: null,
   storageError: null,
@@ -30,6 +31,9 @@ const elements = {
   ojInputs: document.querySelectorAll('input[name="oj"]'),
   contestInput: document.querySelector("#contest-input"),
   contestTypeFieldset: document.querySelector("#cf-contest-type-fieldset"),
+  contestTypeToggle: document.querySelector("#contest-type-toggle"),
+  contestTypeToggleLabel: document.querySelector("#contest-type-toggle-label"),
+  contestTypePanel: document.querySelector("#contest-type-panel"),
   contestTypeInputs: document.querySelectorAll('input[name="contest_types"]'),
   contestTypeSelectAll: document.querySelector("#contest-type-select-all"),
   contestTypeClearAll: document.querySelector("#contest-type-clear-all"),
@@ -108,9 +112,20 @@ function setSelectedContestTypes(contestTypes) {
   });
 }
 
+function getContestTypeToggleLabel() {
+  const selectedCount = getSelectedContestTypes().length;
+  return `Choose contest type (${selectedCount} selected)`;
+}
+
 function updateContestTypeFieldsetState() {
   const isCf = getSelectedOj() === "cf";
+  const isExpanded = isCf && state.isContestTypeExpanded;
   elements.contestTypeFieldset.hidden = !isCf;
+  elements.contestTypeFieldset.classList.toggle("expanded", isExpanded);
+  elements.contestTypeToggle.disabled = !isCf;
+  elements.contestTypeToggleLabel.textContent = getContestTypeToggleLabel();
+  elements.contestTypeToggle.setAttribute("aria-expanded", String(isExpanded));
+  elements.contestTypePanel.hidden = !isExpanded;
   elements.contestTypeInputs.forEach((input) => {
     input.disabled = !isCf;
   });
@@ -912,14 +927,23 @@ function bootstrap() {
   });
   elements.groupImportInput.addEventListener("change", handleGroupImport);
   elements.groupDeleteButton.addEventListener("click", handleGroupDelete);
+  elements.contestTypeToggle.addEventListener("click", () => {
+    state.isContestTypeExpanded = !state.isContestTypeExpanded;
+    updateContestTypeFieldsetState();
+  });
   elements.ojInputs.forEach((input) => {
+    input.addEventListener("change", updateContestTypeFieldsetState);
+  });
+  elements.contestTypeInputs.forEach((input) => {
     input.addEventListener("change", updateContestTypeFieldsetState);
   });
   elements.contestTypeSelectAll.addEventListener("click", () => {
     setSelectedContestTypes(Array.from(elements.contestTypeInputs).map((input) => input.value));
+    updateContestTypeFieldsetState();
   });
   elements.contestTypeClearAll.addEventListener("click", () => {
     setSelectedContestTypes([]);
+    updateContestTypeFieldsetState();
   });
   elements.groupModalClose.addEventListener("click", closeGroupModal);
   elements.groupModalBackdrop.addEventListener("click", closeGroupModal);

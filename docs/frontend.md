@@ -42,12 +42,12 @@
 
 当前包含以下控件：
 
+- 标题行右侧的 `Start Check`
 - `OJ`
 - `Group`
 - `Contest Token`
 - `Contest Type`（仅 Codeforces）
 - `Force refresh cache`
-- `Start Check`
 
 ### OJ
 
@@ -60,7 +60,6 @@
 当前设计：
 
 - 使用下拉框选择浏览器 `localStorage` 中的命名 group
-- `Group` 区域显示 `Stored in this browser only.`
 - `Group` 右侧放置 `View` 和 `Edit` 按钮
 - 下方放置 `New`、`Import JSON`、`Delete` 按钮
 - 若当前没有选中 group，则 `View`、`Edit`、`Delete` 和 `Start Check` 禁用
@@ -89,6 +88,12 @@ JSON 导入格式沿用项目原有 group 结构：
 - 从浏览器发起查询不会把 group 定义写入服务器硬盘
 - 若所选 OJ 在当前 group 下没有用户，前端会阻止提交
 
+### Start Check
+
+- 放在 `Input` 模块标题行右侧
+- 视觉上不再占用表单底部空间
+- 提交逻辑与原来一致，仍然读取当前表单里的全部输入
+
 ### Contest Token
 
 - 使用紧凑的多行文本框
@@ -101,9 +106,12 @@ JSON 导入格式沿用项目原有 group 结构：
 
 当前设计：
 
-- 以一组多选框展示支持的比赛类型
+- 默认显示一个 `Choose contest type` 折叠按钮
+- 折叠按钮文案附带已选数量，例如 `Choose contest type (6 selected)`
+- 点击后展开包含 `Select all`、`Clear all` 和比赛类型多选框的区域
 - 默认全部选中
 - 提供 `Select all` 和 `Clear all`
+- 展开后不再单独形成内部滚动子区域，而是跟随整个 `Input` 模块一起滚动
 - 若当前一个都不选，前端会阻止提交
 
 当前支持的选项：
@@ -205,7 +213,12 @@ JSON 导入格式沿用项目原有 group 结构：
 - 若存在 warning，则在对应 contest 卡片里额外展示 `Possible same-round matches`
 - warning 会列出用户以及触发 warning 的同场 sibling contest ID
 
-`Result` 是主界面里唯一允许内部滚动的模块。若 contest 太多，由 `Result` 自己滚动，而不是整个页面滚动。
+`Result` 是主界面里主要的内部滚动区域。若 contest 太多，由 `Result` 自己滚动，而不是整个页面滚动。
+
+补充说明：
+
+- `Input` 模块在内容过长时由整个模块自身内部滚动
+- `Contest Type` 展开后不再单独形成内部滚动子区域，而是跟随 `Input` 模块一起滚动
 
 ## 交互流程
 
