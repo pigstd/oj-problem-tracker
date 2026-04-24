@@ -366,6 +366,8 @@ class WebApiTest(unittest.TestCase):
         self.assertIn(".contest-type-grid {", styles)
         self.assertIn(".group-actions {", styles)
         self.assertIn(".editor-grid {", styles)
+        self.assertIn(".badge.hit {\n  color: var(--danger);", styles)
+        self.assertIn(".badge.miss {\n  color: var(--success);", styles)
         self.assertIn(".badge.skipped {", styles)
         self.assertIn("contest_warning", styles)
         self.assertIn("contest_skipped", styles)

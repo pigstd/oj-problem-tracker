@@ -501,13 +501,13 @@ textarea {
 }
 
 .badge.hit {
-  color: var(--success);
-  background: rgba(25, 112, 92, 0.14);
+  color: var(--danger);
+  background: rgba(152, 50, 42, 0.14);
 }
 
 .badge.miss {
-  color: var(--danger);
-  background: rgba(152, 50, 42, 0.14);
+  color: var(--success);
+  background: rgba(25, 112, 92, 0.14);
 }
 
 .badge.skipped {

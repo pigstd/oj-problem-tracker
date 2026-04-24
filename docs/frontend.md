@@ -209,6 +209,7 @@ JSON 导入格式沿用项目原有 group 结构：
 - 被过滤掉的 contest 也要显示，但状态为 `Skipped`
 - 命中时展示命中的用户列表
 - 未命中时展示 `no users have done <contest_id>`
+- 命中 badge 使用红色，未命中 badge 使用绿色
 - `Skipped` 卡片展示识别到的比赛类型和跳过原因
 - 若存在 warning，则在对应 contest 卡片里额外展示 `Possible same-round matches`
 - warning 会列出用户以及触发 warning 的同场 sibling contest ID
