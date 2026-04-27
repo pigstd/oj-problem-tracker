@@ -1,7 +1,10 @@
 const GROUP_STORAGE_KEY = "oj-problem-tracker.local-groups.v1";
 const SELECTED_GROUP_STORAGE_KEY = "oj-problem-tracker.selected-group.v1";
 const LANGUAGE_STORAGE_KEY = "oj-problem-tracker.language.v1";
+const THEME_STORAGE_KEY = "oj-problem-tracker.theme.v1";
 const DEFAULT_LANGUAGE = "en";
+const DEFAULT_THEME = "classic";
+const SUPPORTED_THEMES = ["classic", "ocean", "light"];
 
 const translations = {
   en: {
@@ -9,6 +12,10 @@ const translations = {
     "title.githubLink": "View source on GitHub",
     "title.githubRepository": "GitHub repository",
     "language.switchLabel": "Language",
+    "theme.label": "Theme",
+    "theme.classic": "Classic",
+    "theme.ocean": "Ocean",
+    "theme.light": "Light",
     "panel.input": "Input",
     "panel.log": "Log",
     "panel.result": "Result",
@@ -70,6 +77,7 @@ const translations = {
       `Could not save the selected group in this browser: ${message}`,
     "error.saveGroups": ({ message }) => `Could not save groups in this browser: ${message}`,
     "error.saveLanguage": ({ message }) => `Could not save language in this browser: ${message}`,
+    "error.saveTheme": ({ message }) => `Could not save theme in this browser: ${message}`,
     "error.userListType": ({ sourceLabel }) => `${sourceLabel} must be a list of users.`,
     "error.userListItemType": ({ sourceLabel }) =>
       `${sourceLabel} must contain only non-empty strings.`,
@@ -98,6 +106,10 @@ const translations = {
     "title.githubLink": "在 GitHub 查看源码",
     "title.githubRepository": "GitHub 仓库",
     "language.switchLabel": "语言",
+    "theme.label": "主题",
+    "theme.classic": "经典",
+    "theme.ocean": "海风",
+    "theme.light": "清爽",
     "panel.input": "输入",
     "panel.log": "日志",
     "panel.result": "结果",
@@ -158,6 +170,7 @@ const translations = {
     "error.saveSelectedGroup": ({ message }) => `无法在当前浏览器保存所选用户组：${message}`,
     "error.saveGroups": ({ message }) => `无法在当前浏览器保存用户组：${message}`,
     "error.saveLanguage": ({ message }) => `无法在当前浏览器保存语言：${message}`,
+    "error.saveTheme": ({ message }) => `无法在当前浏览器保存主题：${message}`,
     "error.userListType": ({ sourceLabel }) => `${sourceLabel} 必须是用户列表。`,
     "error.userListItemType": ({ sourceLabel }) => `${sourceLabel} 只能包含非空字符串。`,
     "error.groupPayloadType": ({ sourceLabel }) =>
@@ -184,6 +197,7 @@ const translations = {
 
 const state = {
   language: DEFAULT_LANGUAGE,
+  theme: DEFAULT_THEME,
   runStatus: "idle",
   currentRunId: null,
   pollTimer: null,
@@ -238,6 +252,7 @@ const elements = {
   groupModalContent: document.querySelector("#group-modal-content"),
   groupModalActions: document.querySelector("#group-modal-actions"),
   languageButtons: document.querySelectorAll("[data-language]"),
+  themeSelect: document.querySelector("#theme-select"),
 };
 
 function t(key, params = {}, fallback = key) {
@@ -259,11 +274,23 @@ function normalizeLanguage(language) {
   return Object.prototype.hasOwnProperty.call(translations, language) ? language : DEFAULT_LANGUAGE;
 }
 
+function normalizeTheme(theme) {
+  return SUPPORTED_THEMES.includes(theme) ? theme : DEFAULT_THEME;
+}
+
 function readStoredLanguage() {
   try {
     return normalizeLanguage(localStorage.getItem(LANGUAGE_STORAGE_KEY));
   } catch (error) {
     return DEFAULT_LANGUAGE;
+  }
+}
+
+function readStoredTheme() {
+  try {
+    return normalizeTheme(localStorage.getItem(THEME_STORAGE_KEY));
+  } catch (error) {
+    return DEFAULT_THEME;
   }
 }
 
@@ -273,6 +300,19 @@ function persistLanguage() {
   } catch (error) {
     throw localizedError("error.saveLanguage", { message: error.message });
   }
+}
+
+function persistTheme() {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, state.theme);
+  } catch (error) {
+    throw localizedError("error.saveTheme", { message: error.message });
+  }
+}
+
+function applyTheme() {
+  document.documentElement.dataset.theme = state.theme;
+  elements.themeSelect.value = state.theme;
 }
 
 function applyLanguage() {
@@ -322,6 +362,18 @@ function setLanguage(language, { persist = false } = {}) {
     }
   }
   refreshLocalizedUi();
+}
+
+function setTheme(theme, { persist = false } = {}) {
+  state.theme = normalizeTheme(theme);
+  if (persist) {
+    try {
+      persistTheme();
+    } catch (error) {
+      renderFormErrorFromError(error);
+    }
+  }
+  applyTheme();
 }
 
 function setStatusPill(status) {
@@ -1268,14 +1320,21 @@ function handleLanguageSelection(event) {
   setLanguage(languageButton.dataset.language, { persist: true });
 }
 
+function handleThemeSelection(event) {
+  setTheme(event.target.value, { persist: true });
+}
+
 function bootstrap() {
   state.language = readStoredLanguage();
+  state.theme = readStoredTheme();
+  applyTheme();
   applyLanguage();
 
   elements.form.addEventListener("submit", handleSubmit);
   elements.languageButtons.forEach((button) => {
     button.addEventListener("click", handleLanguageSelection);
   });
+  elements.themeSelect.addEventListener("change", handleThemeSelection);
   elements.groupSelect.addEventListener("change", handleGroupSelectionChange);
   elements.groupViewButton.addEventListener("click", handleGroupView);
   elements.groupEditButton.addEventListener("click", handleGroupEdit);
