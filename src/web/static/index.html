@@ -17,6 +17,8 @@
           rel="noopener noreferrer"
           aria-label="View source on GitHub"
           title="View source on GitHub"
+          data-i18n-aria-label="title.githubLink"
+          data-i18n-title="title.githubLink"
         >
           <svg
             class="title-repo-icon"
@@ -36,19 +38,33 @@
               .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
             />
           </svg>
-          <span class="sr-only">GitHub repository</span>
+          <span class="sr-only" data-i18n="title.githubRepository">GitHub repository</span>
         </a>
+        <div
+          class="language-switch"
+          role="group"
+          aria-label="Language"
+          data-i18n-aria-label="language.switchLabel"
+        >
+          <button class="language-option active" type="button" data-language="en" aria-pressed="true">
+            English
+          </button>
+          <button class="language-option" type="button" data-language="zh-CN" aria-pressed="false">
+            中文
+          </button>
+        </div>
       </header>
 
       <main class="content-grid">
         <section class="panel input-panel">
           <div class="panel-header">
-            <h2>Input</h2>
+            <h2 data-i18n="panel.input">Input</h2>
             <button
               id="submit-button"
               class="submit-button panel-submit-button"
               type="submit"
               form="check-form"
+              data-i18n="action.startCheck"
             >
               Start Check
             </button>
@@ -56,7 +72,7 @@
 
           <form id="check-form" class="check-form">
             <fieldset class="field-block oj-fieldset">
-              <legend>OJ</legend>
+              <legend data-i18n="field.oj">OJ</legend>
               <label class="oj-option">
                 <input type="radio" name="oj" value="atcoder" checked />
                 <span>AtCoder</span>
@@ -68,32 +84,33 @@
             </fieldset>
 
             <div class="field-block">
-              <label class="field-label" for="group-select">Group</label>
+              <label class="field-label" for="group-select" data-i18n="field.group">Group</label>
               <div class="group-row">
                 <select id="group-select" name="group"></select>
-                <button id="group-view-button" class="secondary-button" type="button">View</button>
-                <button id="group-edit-button" class="secondary-button" type="button">Edit</button>
+                <button id="group-view-button" class="secondary-button" type="button" data-i18n="action.view">View</button>
+                <button id="group-edit-button" class="secondary-button" type="button" data-i18n="action.edit">Edit</button>
               </div>
               <div class="group-actions">
-                <button id="group-new-button" class="tertiary-button" type="button">New</button>
-                <button id="group-import-button" class="tertiary-button" type="button">Import JSON</button>
-                <button id="group-delete-button" class="tertiary-button" type="button">Delete</button>
+                <button id="group-new-button" class="tertiary-button" type="button" data-i18n="action.new">New</button>
+                <button id="group-import-button" class="tertiary-button" type="button" data-i18n="action.importJson">Import JSON</button>
+                <button id="group-delete-button" class="tertiary-button" type="button" data-i18n="action.delete">Delete</button>
               </div>
               <input id="group-import-input" type="file" accept=".json,application/json" hidden />
             </div>
 
             <div class="field-block">
-              <label class="field-label" for="contest-input">Contest Token</label>
+              <label class="field-label" for="contest-input" data-i18n="field.contestToken">Contest Token</label>
               <textarea
                 id="contest-input"
                 name="contest"
                 rows="4"
                 placeholder="abc403 abc404-abc406&#10;or&#10;2065 2067-2070"
+                data-i18n-placeholder="field.contestPlaceholder"
               ></textarea>
             </div>
 
             <fieldset id="cf-contest-type-fieldset" class="field-block contest-type-fieldset" hidden>
-              <legend class="sr-only">Contest Type</legend>
+              <legend class="sr-only" data-i18n="field.contestType">Contest Type</legend>
               <button
                 id="contest-type-toggle"
                 class="contest-type-toggle"
@@ -109,10 +126,10 @@
               <div id="contest-type-panel" class="contest-type-panel" hidden>
                 <div class="contest-type-heading">
                   <div class="contest-type-actions">
-                    <button id="contest-type-select-all" class="tertiary-button" type="button">
+                    <button id="contest-type-select-all" class="tertiary-button" type="button" data-i18n="action.selectAll">
                       Select all
                     </button>
-                    <button id="contest-type-clear-all" class="tertiary-button" type="button">
+                    <button id="contest-type-clear-all" class="tertiary-button" type="button" data-i18n="action.clearAll">
                       Clear all
                     </button>
                   </div>
@@ -150,7 +167,7 @@
 
             <label class="refresh-toggle" for="refresh-cache">
               <input type="checkbox" id="refresh-cache" name="refresh_cache" />
-              <span>Force refresh cache</span>
+              <span data-i18n="field.forceRefreshCache">Force refresh cache</span>
             </label>
           </form>
 
@@ -160,7 +177,7 @@
 
         <section class="panel log-panel">
           <div class="panel-header">
-            <h2>Log</h2>
+            <h2 data-i18n="panel.log">Log</h2>
             <span id="run-status" class="status-pill idle">Idle</span>
           </div>
 
@@ -169,7 +186,7 @@
 
         <section class="panel result-panel">
           <div class="panel-header">
-            <h2>Result</h2>
+            <h2 data-i18n="panel.result">Result</h2>
           </div>
 
           <div id="contest-results" class="result-list empty-state">
@@ -189,7 +206,7 @@
       >
         <div class="modal-header">
           <div>
-            <p id="group-modal-kicker" class="modal-kicker">Group Detail</p>
+            <p id="group-modal-kicker" class="modal-kicker" data-i18n="modal.groupDetail">Group Detail</p>
             <h2 id="group-modal-title">Group</h2>
           </div>
           <button
@@ -197,6 +214,8 @@
             class="icon-button"
             type="button"
             aria-label="Close group detail"
+            data-i18n-aria-label="modal.closeGroupDetail"
+            data-i18n="action.close"
           >
             Close
           </button>

@@ -143,6 +143,8 @@ Codeforces contest type filter rules:
 Web UI notes:
 
 - Before the first run, create or import a local group in the browser.
+- The page defaults to English and supports switching between `English` and `中文`.
+- The selected language is stored in browser `localStorage`.
 - The page stores groups in browser `localStorage`, not in server-side `usergroup/`.
 - `View`, `Edit`, `New`, `Import JSON`, and `Delete` all operate on local browser groups.
 - In the `cf` form, the page shows a `Contest Type` multi-select area.

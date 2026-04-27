@@ -68,6 +68,9 @@ python3 -m unittest discover -s tests -v
 - `POST /api/check` 必须带 `group_users`
 - `POST /api/check` 的 `contest_types` 校验
 - Web 不再暴露 `/api/groups*`
+- Web 标题行提供 `English` / `中文` 语言切换
+- Web 语言选择保存在 `localStorage` 的 `oj-problem-tracker.language.v1`
+- Web 静态资源包含英文/中文翻译字典和中文固定文案
 - 浏览器 `localStorage` group 管理 UI
 - Codeforces 比赛类型多选 UI
 - `Result` 中的 `Skipped` contest 卡片
