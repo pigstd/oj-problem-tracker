@@ -4,7 +4,7 @@ const LANGUAGE_STORAGE_KEY = "oj-problem-tracker.language.v1";
 const THEME_STORAGE_KEY = "oj-problem-tracker.theme.v1";
 const DEFAULT_LANGUAGE = "en";
 const DEFAULT_THEME = "classic";
-const SUPPORTED_THEMES = ["classic", "ocean", "light"];
+const SUPPORTED_THEMES = ["classic", "ocean", "light", "rainbow"];
 
 const translations = {
   en: {
@@ -16,6 +16,7 @@ const translations = {
     "theme.classic": "Classic",
     "theme.ocean": "Ocean",
     "theme.light": "Light",
+    "theme.rainbow": "Rainbow",
     "panel.input": "Input",
     "panel.log": "Log",
     "panel.result": "Result",
@@ -110,6 +111,7 @@ const translations = {
     "theme.classic": "经典",
     "theme.ocean": "海风",
     "theme.light": "清爽",
+    "theme.rainbow": "彩虹",
     "panel.input": "输入",
     "panel.log": "日志",
     "panel.result": "结果",

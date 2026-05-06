@@ -20,7 +20,7 @@
 - 页面顶部只保留一个标题：`OJ Problem Tracker`
 - 标题后附带一个 GitHub 图标链接，跳到 repo：`https://github.com/pigstd/oj-problem-tracker`
 - 标题右侧提供语言切换：`English` / `中文`
-- 语言切换后提供主题切换：`Classic` / `Ocean` / `Light`
+- 语言切换后提供主题切换：`Classic` / `Ocean` / `Light` / `Rainbow`
 - 默认语言为英文；用户选择的语言保存在浏览器 `localStorage`
 - 默认主题为 `Classic`；用户选择的主题保存在浏览器 `localStorage`
 - 不直接在标题区展示完整 repo URL
@@ -42,16 +42,17 @@
 
 ### 主题切换
 
-当前 Web 前端支持三套固定主题：
+当前 Web 前端支持四套固定主题：
 
 - `Classic`：默认主题，保持原有视觉
 - `Ocean`：冷色主题
 - `Light`：浅色主题
+- `Rainbow`：彩虹主题
 
 规则：
 
 - 主题缓存 key 为 `oj-problem-tracker.theme.v1`
-- 只接受 `classic`、`ocean` 和 `light`，非法缓存值回退到 `classic`
+- 只接受 `classic`、`ocean`、`light` 和 `rainbow`，非法缓存值回退到 `classic`
 - 切换主题后立即更新配色，不需要刷新页面
 - 主题选择只保存在当前浏览器，不写入服务器
 - 主题只影响前端配色，不影响后端接口、检查流程或结果

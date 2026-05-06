@@ -71,9 +71,9 @@ python3 -m unittest discover -s tests -v
 - Web 标题行提供 `English` / `中文` 语言切换
 - Web 语言选择保存在 `localStorage` 的 `oj-problem-tracker.language.v1`
 - Web 静态资源包含英文/中文翻译字典和中文固定文案
-- Web 标题行提供 `Classic` / `Ocean` / `Light` 主题切换
+- Web 标题行提供 `Classic` / `Ocean` / `Light` / `Rainbow` 主题切换
 - Web 主题选择保存在 `localStorage` 的 `oj-problem-tracker.theme.v1`
-- Web 静态资源包含三个主题的 CSS 变量覆盖
+- Web 静态资源包含四个主题的 CSS 变量覆盖
 - 浏览器 `localStorage` group 管理 UI
 - Codeforces 比赛类型多选 UI
 - `Result` 中的 `Skipped` contest 卡片
