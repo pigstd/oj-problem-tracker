@@ -74,7 +74,8 @@ python3 -m unittest discover -s tests -v
 - Web 标题行提供 `Classic` / `Ocean` / `Light` / `Rainbow` 主题切换
 - Web 主题选择保存在 `localStorage` 的 `oj-problem-tracker.theme.v1`
 - Web 静态资源包含四个主题的 CSS 变量覆盖
-- Web 静态资源使用自托管 `Quicksand` 字体，不依赖 Google Fonts CDN
+- Web 静态资源使用自托管 `Quicksand` 和 `Roboto` 字体，不依赖 Google Fonts CDN
+- Web `Result` 空状态文案在内容区域居中显示
 - 浏览器 `localStorage` group 管理 UI
 - Codeforces 比赛类型多选 UI
 - `Result` 中的 `Skipped` contest 卡片

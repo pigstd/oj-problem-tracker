@@ -6,6 +6,15 @@
   src: url("/static/fonts/quicksand-variable.ttf") format("truetype");
 }
 
+@font-face {
+  font-family: "Roboto";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  font-stretch: 75% 100%;
+  src: url("/static/fonts/roboto-variable.ttf") format("truetype");
+}
+
 :root {
   --bg-top: #0f2030;
   --bg-bottom: #1c3b53;
@@ -269,8 +278,10 @@ textarea {
 }
 
 .title-row h1 {
+  font-family: "Roboto", "Avenir Next", "Segoe UI Variable", "Helvetica Neue", sans-serif;
   font-size: clamp(2rem, 3.2vw, 3.15rem);
   line-height: 1;
+  letter-spacing: 0;
   color: var(--title-text);
 }
 
@@ -869,6 +880,7 @@ textarea {
 }
 
 .empty-state {
+  place-content: center;
   place-items: center;
   text-align: center;
   color: var(--text-muted);

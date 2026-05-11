@@ -10,20 +10,22 @@
 - 页面主视图单屏展示
 - 桌面端页面本身不出现纵向滚动
 - 主界面固定为三块：`Input`、`Log`、`Result`
-- 全局使用自托管的 Google Fonts `Quicksand` 字体
+- 使用自托管的 Google Fonts 字体：主体 UI 使用 `Quicksand`，顶部网页标题使用 `Roboto`
 
 这里的“单屏、不滚动”目标针对常见桌面和笔记本视口。当前实现中，较小宽度会退化为纵向堆叠布局，以保证仍然可用。
 
 ## 字体
 
-Web UI 使用仓库内置的 `Quicksand` variable font，不从 Google Fonts CDN 加载运行时资源。
+Web UI 使用仓库内置的 `Quicksand` 和 `Roboto` variable fonts，不从 Google Fonts CDN 加载运行时资源。
 
 当前字体资源位置：
 
 - `src/web/static/fonts/quicksand-variable.ttf`
+- `src/web/static/fonts/roboto-variable.ttf`
 - `src/web/static/fonts/OFL.txt`
+- `src/web/static/fonts/Roboto-OFL.txt`
 
-`Quicksand` 应用于全局 UI 文案，包括标题、表单、按钮、日志和结果区。字体文件随静态资源由本机 Web 服务提供。
+`Quicksand` 应用于大部分 UI 文案，包括面板标题、表单、按钮、日志和结果区。顶部网页标题 `OJ Problem Tracker` 使用 `Roboto`。字体文件随静态资源由本机 Web 服务提供。
 
 ## 页面结构
 
@@ -257,6 +259,7 @@ JSON 导入格式沿用项目原有 group 结构：
 - 每个展开后的 contest 都单独显示
 - 命中和未命中都要显示
 - 被过滤掉的 contest 也要显示，但状态为 `Skipped`
+- 无结果时，空状态文案在 `Result` 内容区域内居中显示
 - 命中时展示命中的用户列表
 - 未命中时展示 `no users have done <contest_id>`
 - 命中 badge 使用红色，未命中 badge 使用绿色

@@ -395,6 +395,8 @@ class WebApiTest(unittest.TestCase):
         self.assertIn(".panel-submit-button {", styles)
         self.assertIn(".result-list {", styles)
         self.assertIn("overflow-y: auto;", styles)
+        self.assertIn(".empty-state {", styles)
+        self.assertIn("place-content: center;", styles)
         self.assertIn("slice(-3).reverse()", script)
         self.assertIn(".contest-type-toggle {", styles)
         self.assertIn(".contest-type-panel {", styles)
@@ -454,22 +456,33 @@ class WebApiTest(unittest.TestCase):
         self.assertNotIn('"Starting"', script)
         self.assertNotIn("userResults", script)
 
-    def test_static_assets_serve_self_hosted_quicksand_font(self) -> None:
-        """Verify the web UI uses the bundled Quicksand font instead of a CDN font."""
+    def test_static_assets_serve_self_hosted_fonts(self) -> None:
+        """Verify the web UI uses bundled fonts instead of CDN fonts."""
         html = self._text_response_from_request(self._get_request("/"))
         styles = self._text_response_from_request(self._get_request("/static/styles.css"))
-        raw_response = self._raw_response_bytes_from_request(
+        quicksand_response = self._raw_response_bytes_from_request(
             self._get_request("/static/fonts/quicksand-variable.ttf")
         )
-        headers, body = raw_response.split(b"\r\n\r\n", maxsplit=1)
+        roboto_response = self._raw_response_bytes_from_request(
+            self._get_request("/static/fonts/roboto-variable.ttf")
+        )
+        quicksand_headers, quicksand_body = quicksand_response.split(b"\r\n\r\n", maxsplit=1)
+        roboto_headers, roboto_body = roboto_response.split(b"\r\n\r\n", maxsplit=1)
 
         self.assertIn("@font-face {", styles)
         self.assertIn('font-family: "Quicksand";', styles)
         self.assertIn('font-weight: 300 700;', styles)
         self.assertIn('url("/static/fonts/quicksand-variable.ttf")', styles)
+        self.assertIn('font-family: "Roboto";', styles)
+        self.assertIn('font-weight: 100 900;', styles)
+        self.assertIn('url("/static/fonts/roboto-variable.ttf")', styles)
         self.assertIn('font-family: "Quicksand", "Avenir Next"', styles)
-        self.assertIn(b"Content-Type: font/ttf", headers)
-        self.assertGreater(len(body), 100_000)
+        self.assertIn(".title-row h1 {", styles)
+        self.assertIn('font-family: "Roboto", "Avenir Next"', styles)
+        self.assertIn(b"Content-Type: font/ttf", quicksand_headers)
+        self.assertIn(b"Content-Type: font/ttf", roboto_headers)
+        self.assertGreater(len(quicksand_body), 100_000)
+        self.assertGreater(len(roboto_body), 400_000)
         self.assertNotIn("fonts.googleapis.com", html)
         self.assertNotIn("fonts.googleapis.com", styles)
         self.assertNotIn("fonts.gstatic.com", html)

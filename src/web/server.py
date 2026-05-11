@@ -329,6 +329,9 @@ class TrackerRequestHandler(BaseHTTPRequestHandler):
         if name == "fonts/quicksand-variable.ttf":
             self._serve_static_file(name, "font/ttf")
             return
+        if name == "fonts/roboto-variable.ttf":
+            self._serve_static_file(name, "font/ttf")
+            return
         _json_response(self, HTTPStatus.NOT_FOUND, {"error": {"message": "asset not found"}})
 
     def _serve_static_file(self, name: str, content_type: str) -> None:
