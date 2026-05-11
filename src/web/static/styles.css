@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Quicksand";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url("/static/fonts/quicksand-variable.ttf") format("truetype");
+}
+
 :root {
   --bg-top: #0f2030;
   --bg-bottom: #1c3b53;
@@ -200,7 +208,7 @@ body {
 body {
   margin: 0;
   overflow: hidden;
-  font-family: "Avenir Next", "Segoe UI Variable", "Helvetica Neue", sans-serif;
+  font-family: "Quicksand", "Avenir Next", "Segoe UI Variable", "Helvetica Neue", sans-serif;
   color: var(--text-main);
   background: var(--page-background);
 }
@@ -210,8 +218,8 @@ h2,
 h3,
 strong,
 legend {
-  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
-  letter-spacing: -0.02em;
+  font-family: "Quicksand", "Avenir Next", "Segoe UI Variable", "Helvetica Neue", sans-serif;
+  letter-spacing: 0;
 }
 
 h1,

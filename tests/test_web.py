@@ -454,6 +454,27 @@ class WebApiTest(unittest.TestCase):
         self.assertNotIn('"Starting"', script)
         self.assertNotIn("userResults", script)
 
+    def test_static_assets_serve_self_hosted_quicksand_font(self) -> None:
+        """Verify the web UI uses the bundled Quicksand font instead of a CDN font."""
+        html = self._text_response_from_request(self._get_request("/"))
+        styles = self._text_response_from_request(self._get_request("/static/styles.css"))
+        raw_response = self._raw_response_bytes_from_request(
+            self._get_request("/static/fonts/quicksand-variable.ttf")
+        )
+        headers, body = raw_response.split(b"\r\n\r\n", maxsplit=1)
+
+        self.assertIn("@font-face {", styles)
+        self.assertIn('font-family: "Quicksand";', styles)
+        self.assertIn('font-weight: 300 700;', styles)
+        self.assertIn('url("/static/fonts/quicksand-variable.ttf")', styles)
+        self.assertIn('font-family: "Quicksand", "Avenir Next"', styles)
+        self.assertIn(b"Content-Type: font/ttf", headers)
+        self.assertGreater(len(body), 100_000)
+        self.assertNotIn("fonts.googleapis.com", html)
+        self.assertNotIn("fonts.googleapis.com", styles)
+        self.assertNotIn("fonts.gstatic.com", html)
+        self.assertNotIn("fonts.gstatic.com", styles)
+
     def _get_request(self, path: str) -> bytes:
         """Build one raw GET request for the handler under test."""
         return f"GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n".encode("utf-8")
@@ -485,9 +506,13 @@ class WebApiTest(unittest.TestCase):
 
     def _raw_response_from_request(self, request_bytes: bytes) -> str:
         """Run the handler once and return the raw HTTP response text."""
+        return self._raw_response_bytes_from_request(request_bytes).decode("utf-8")
+
+    def _raw_response_bytes_from_request(self, request_bytes: bytes) -> bytes:
+        """Run the handler once and return the raw HTTP response bytes."""
         socket = _FakeSocket(request_bytes)
         TrackerRequestHandler(socket, ("127.0.0.1", 8000), self.server)
-        return socket.response_bytes.decode("utf-8")
+        return socket.response_bytes
 
     def _get_json(self, path: str) -> dict:
         """Run one in-memory GET request and decode the JSON response."""

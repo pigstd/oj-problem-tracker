@@ -146,6 +146,7 @@ Web UI notes:
 - The page defaults to English and supports switching between `English` and `中文`.
 - The selected language is stored in browser `localStorage`.
 - The page supports `Classic`, `Ocean`, `Light`, and `Rainbow` themes, with the selected theme stored in browser `localStorage`.
+- The page uses a bundled Quicksand font served from local static assets, not Google Fonts CDN.
 - The page stores groups in browser `localStorage`, not in server-side `usergroup/`.
 - `View`, `Edit`, `New`, `Import JSON`, and `Delete` all operate on local browser groups.
 - In the `cf` form, the page shows a `Contest Type` multi-select area.

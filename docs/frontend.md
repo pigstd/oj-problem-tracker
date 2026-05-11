@@ -10,8 +10,20 @@
 - 页面主视图单屏展示
 - 桌面端页面本身不出现纵向滚动
 - 主界面固定为三块：`Input`、`Log`、`Result`
+- 全局使用自托管的 Google Fonts `Quicksand` 字体
 
 这里的“单屏、不滚动”目标针对常见桌面和笔记本视口。当前实现中，较小宽度会退化为纵向堆叠布局，以保证仍然可用。
+
+## 字体
+
+Web UI 使用仓库内置的 `Quicksand` variable font，不从 Google Fonts CDN 加载运行时资源。
+
+当前字体资源位置：
+
+- `src/web/static/fonts/quicksand-variable.ttf`
+- `src/web/static/fonts/OFL.txt`
+
+`Quicksand` 应用于全局 UI 文案，包括标题、表单、按钮、日志和结果区。字体文件随静态资源由本机 Web 服务提供。
 
 ## 页面结构
 
